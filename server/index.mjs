@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
-import { sponsorStatus, planWithAkash, explainWithAkash, recordWithClickHouse, runOnGuild, notifyGuild } from './sponsors.mjs';
+import { sponsorStatus, contextFromSenso, planWithAkash, explainWithAkash, recordWithClickHouse, runOnGuild, notifyGuild } from './sponsors.mjs';
 import { parseProgramUrl, captureIsUsable, fetchProgramScope, probeProject, draftReport, validateSubmission, submitToHackerOne } from './core.mjs';
 
 const root = new URL('../', import.meta.url);
@@ -47,7 +47,7 @@ function captureHeaders(request, path) {
 function status() {
   const sponsors = sponsorStatus();
   return {
-    sponsors: { guild: sponsors.guild, akash: sponsors.akashml, clickhouse: sponsors.clickhouse },
+    sponsors: { guild: sponsors.guild, akash: sponsors.akashml, clickhouse: sponsors.clickhouse, senso: sponsors.senso },
     hackerone: {
       apiConfigured: Boolean(process.env.HACKERONE_API_USERNAME && process.env.HACKERONE_API_TOKEN),
       idVerified: process.env.HACKERONE_ID_VERIFIED === 'true',
@@ -99,7 +99,7 @@ async function handleRun(body) {
   if (Date.now() - intake.createdAt > 30 * 60 * 1000) throw new Error('Program intake expired. Capture the current scope again.');
   const mode = body.mode;
   if (!['lab', 'live'].includes(mode)) throw new Error('Choose lab or live mode.');
-  if (!sponsorStatus().ready) throw new Error('Guild, AkashML, and ClickHouse must all be configured before a run.');
+  if (!sponsorStatus().ready) throw new Error('Guild, AkashML, ClickHouse, and Senso must all be configured before a run.');
   if (mode === 'live') {
     if (!intake.browserReady || !intake.scope) throw new Error('A live run requires signed-in browser capture and HackerOne structured scope.');
     if (!Object.values(intake.scope.policyChecks).every(Boolean)) throw new Error('Current HackerOne policy did not confirm every live-test boundary.');
@@ -109,11 +109,13 @@ async function handleRun(body) {
   const id = randomUUID();
   const sponsorTrace = [];
   const scopeApproved = mode === 'lab' || Boolean(intake.browserReady && intake.scope);
+  const policyContext = await contextFromSenso();
+  sponsorTrace.push({ tool: 'Senso', status: 'retrieved', detail: `Policy source ${policyContext.contentId}, version ${policyContext.versionId}` });
   const guild = await runOnGuild('start', { id, programHandle: 'vercel', scopeApproved });
   sponsorTrace.push({ tool: 'Guild', status: guild.allow ? 'approved' : 'stopped', detail: `Policy gate session ${guild.sessionId}` });
   if (!guild.allow) throw new Error('Guild declined this bounded check.');
 
-  const plan = await planWithAkash({ programHandle: 'vercel', scopeApproved });
+  const plan = await planWithAkash({ programHandle: 'vercel', scopeApproved, policyContext });
   sponsorTrace.push({ tool: 'AkashML', status: plan.check === 'project_access' ? 'selected' : 'stopped', detail: plan.rationale });
   if (plan.check !== 'project_access') throw new Error('AkashML did not select the approved project-access check.');
 

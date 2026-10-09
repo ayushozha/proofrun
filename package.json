@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "start": "node server/index.mjs",
-    "smoke": "node scripts/smoke.mjs"
+    "smoke": "node scripts/smoke.mjs",
+    "senso:seed": "node scripts/seed-senso.mjs"
   },
   "engines": {
     "node": ">=24"

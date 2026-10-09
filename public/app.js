@@ -46,7 +46,7 @@ function renderStatus(data) {
   const sponsors = data.sponsors || {};
   const list = $('sponsor-statuses');
   list.replaceChildren();
-  for (const [key, label] of [['guild', 'Guild'], ['akash', 'AkashML'], ['clickhouse', 'ClickHouse']]) {
+  for (const [key, label] of [['guild', 'Guild'], ['akash', 'AkashML'], ['clickhouse', 'ClickHouse'], ['senso', 'Senso']]) {
     const ready = connected(sponsors[key]);
     const row = document.createElement('li');
     row.className = ready ? 'is-ready' : 'is-missing';
@@ -111,8 +111,8 @@ function updateModeNote() {
     $('mode-note').textContent = 'Lab mode is a workflow demonstration, not a bounty finding.';
   } else if (!readiness?.vercel?.configured) {
     $('mode-note').textContent = 'Live mode needs two researcher-owned Vercel accounts configured on the server.';
-  } else if (!['guild', 'akash', 'clickhouse'].every((key) => connected(readiness.sponsors?.[key]))) {
-    $('mode-note').textContent = 'Live mode needs Guild, AkashML, and ClickHouse configured.';
+  } else if (!['guild', 'akash', 'clickhouse', 'senso'].every((key) => connected(readiness.sponsors?.[key]))) {
+    $('mode-note').textContent = 'Live mode needs Guild, AkashML, ClickHouse, and Senso configured.';
   } else {
     $('mode-note').textContent = 'Live checks use only the captured program scope and researcher-owned accounts.';
   }

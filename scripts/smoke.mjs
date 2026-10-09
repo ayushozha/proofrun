@@ -4,7 +4,8 @@ import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { once } from 'node:events';
 
-const stubs = { guildStarts: 0, guildCompletes: 0, akash: 0, clickhouse: 0 };
+const stubs = { guildStarts: 0, guildCompletes: 0, akash: 0, clickhouse: 0, senso: 0 };
+let returnedPolicyId = 'stub-policy';
 const sessions = new Map();
 const insertedChecks = [];
 const stub = http.createServer(async (request, response) => {
@@ -14,10 +15,22 @@ const stub = http.createServer(async (request, response) => {
   if (url.pathname.endsWith('/chat/completions')) {
     stubs.akash++;
     const explanation = JSON.parse(body).messages[0].content.includes('Explain an owned-account');
+    const planInput = explanation ? null : JSON.parse(JSON.parse(body).messages[1].content);
     const content = explanation
       ? { summary: 'Owner and other account both returned HTTP 200 with the owner marker.', validationQuestions: ['Which fields are private in the other-account response?'] }
-      : { check: 'project_access', rationale: 'Approved bounded check.' };
+      : { check: planInput.policySource?.passage ? 'project_access' : 'stop', rationale: 'Approved bounded check.', sourceContentId: planInput.policySource?.contentId };
     response.end(JSON.stringify({ choices: [{ message: { content: JSON.stringify(content) } }] }));
+  } else if (url.pathname.endsWith('/org/search/context')) {
+    stubs.senso++;
+    const search = JSON.parse(body);
+    assert.deepEqual(search.content_ids, ['stub-policy']);
+    assert.equal(search.require_scoped_ids, true);
+    assert.equal(request.headers['x-api-key'], 'stub');
+    response.end(JSON.stringify({ results: [{
+      content_id: returnedPolicyId, version_id: 'stub-version', kb_node_id: 'stub-node',
+      title: 'ProofRun bounded verification policy',
+      chunk_text: 'Only GET /v9/projects/{idOrName} on researcher-owned Vercel accounts is approved. Respect 5 requests per second.',
+    }] }));
   } else if (url.pathname.endsWith('/sessions') && request.method === 'POST') {
     const payload = JSON.parse(JSON.parse(body).initial_prompt);
     const id = randomUUID();
@@ -56,6 +69,7 @@ const app = spawn(process.execPath, ['server/index.mjs'], {
     GUILD_API_KEY: 'stub', GUILD_WORKSPACE: 'stub', GUILD_AGENT_ID: 'stub', GUILD_API_BASE_URL: `http://127.0.0.1:${stubPort}/v1`,
     AKASHML_API_KEY: 'stub', AKASHML_MODEL: 'configured-by-test', AKASHML_BASE_URL: `http://127.0.0.1:${stubPort}/v1`,
     CLICKHOUSE_URL: `http://127.0.0.1:${stubPort}/`, CLICKHOUSE_USER: 'stub', CLICKHOUSE_PASSWORD: 'stub',
+    SENSO_API_KEY: 'stub', SENSO_POLICY_CONTENT_ID: 'stub-policy', SENSO_API_BASE_URL: `http://127.0.0.1:${stubPort}/v1`,
     HACKERONE_API_USERNAME: '', HACKERONE_API_TOKEN: '', HACKERONE_ID_VERIFIED: 'false',
     VERCEL_OWNER_TOKEN: '', VERCEL_OTHER_TOKEN: '', VERCEL_PROJECT_ID: '',
   },
@@ -91,15 +105,21 @@ try {
   assert.equal(run.body.mode, 'lab');
   assert.equal(run.body.submissionEligible, false);
   assert.equal(run.body.evidence.length, 2);
-  assert.equal(run.body.sponsorTrace.length, 5);
+  assert.equal(run.body.sponsorTrace.length, 6);
+  assert(run.body.sponsorTrace.some((item) => item.tool === 'Senso' && item.detail.includes('stub-version')));
   assert.equal(run.body.reviewNote.validationQuestions.length, 1);
   assert.equal(typeof run.body.queryLatencyMs, 'number');
   assert.equal(insertedChecks.length, 2);
   assert(insertedChecks.every((check) => check.mode === 'lab' && check.program === 'vercel'));
   const submit = await post('/api/submit', { runId: run.body.id, humanValidated: true });
   assert.equal(submit.status, 400);
-  assert.deepEqual(stubs, { guildStarts: 1, guildCompletes: 1, akash: 2, clickhouse: 3 });
-  console.log('Smoke passed: browser capture, scoped intake, three sponsor HTTP adapters, lab probe, ClickHouse verdict, submission guard.');
+  returnedPolicyId = 'wrong-policy';
+  const blocked = await post('/api/run', { mode: 'lab' });
+  assert.equal(blocked.status, 400);
+  assert.match(blocked.body.error, /Senso did not return a usable passage/);
+  assert.equal(insertedChecks.length, 2, 'a mismatched Senso source must stop before probing');
+  assert.deepEqual(stubs, { guildStarts: 1, guildCompletes: 1, akash: 2, clickhouse: 3, senso: 2 });
+  console.log('Smoke passed: browser capture, scoped intake, four sponsor HTTP adapters, lab probe, ClickHouse verdict, submission guard.');
 } finally {
   app.kill();
   stub.close();
