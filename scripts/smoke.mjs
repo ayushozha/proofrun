@@ -63,7 +63,18 @@ const stub = http.createServer(async (request, response) => {
       insertedChecks.push(...body.trim().split('\n').map((row) => JSON.parse(row)));
     }
     response.setHeader('Content-Type', 'text/plain');
-    response.end(body.includes('SELECT') ? JSON.stringify({ owner_read: 1, other_read: 1, other_denied: 0, anonymous_denied: 0 }) : '');
+    if (body.includes('SELECT')) {
+      const runId = /run_id = '([a-zA-Z0-9_-]+)'/.exec(body)?.[1];
+      assert(runId, 'ClickHouse comparison must select one run ID');
+      const rows = insertedChecks.filter((check) => check.run_id === runId);
+      const count = (actor, predicate) => rows.filter((row) => row.actor === actor && predicate(row)).length;
+      response.end(JSON.stringify({
+        owner_read: count('owner', (row) => row.status >= 200 && row.status < 300 && row.owner_marker === 1),
+        other_read: count('other', (row) => row.status >= 200 && row.status < 300 && row.owner_marker === 1),
+        other_denied: count('other', (row) => [401, 403, 404].includes(row.status)),
+        anonymous_denied: count('anonymous', (row) => [401, 403, 404].includes(row.status)),
+      }));
+    } else response.end('');
   } else {
     response.statusCode = 404;
     response.end('{}');
@@ -213,13 +224,27 @@ try {
   assert.equal(run.body.verdict, 'candidate');
   assert.equal(run.body.mode, 'lab');
   assert.equal(run.body.submissionEligible, false);
+  assert.equal(run.body.reportDraft, null);
   assert.equal(run.body.evidence.length, 2);
+  assert.equal(run.body.validation.passed, true);
+  assert.equal(run.body.validation.exposed.verdict, 'candidate');
+  assert.equal(run.body.validation.patched.verdict, 'expected');
+  assert.deepEqual(run.body.validation.exposed.evidence.map(({ actor, status, ownerMarkerPresent }) => ({ actor, status, ownerMarkerPresent })), [
+    { actor: 'owner', status: 200, ownerMarkerPresent: true },
+    { actor: 'other', status: 200, ownerMarkerPresent: true },
+  ]);
+  assert.deepEqual(run.body.validation.patched.evidence.map(({ actor, status, ownerMarkerPresent }) => ({ actor, status, ownerMarkerPresent })), [
+    { actor: 'owner', status: 200, ownerMarkerPresent: true },
+    { actor: 'other', status: 403, ownerMarkerPresent: false },
+    { actor: 'anonymous', status: 403, ownerMarkerPresent: false },
+  ]);
   assert.equal(run.body.sponsorTrace.length, 6);
   assert(run.body.sponsorTrace.some((item) => item.tool === 'Senso' && item.detail.includes('stub-version')));
   assert.equal(run.body.reviewNote.validationQuestions.length, 1);
   assert.equal(typeof run.body.queryLatencyMs, 'number');
-  assert.equal(insertedChecks.length, 2);
+  assert.equal(insertedChecks.length, 5);
   assert(insertedChecks.every((check) => check.mode === 'lab' && check.program === 'vercel'));
+  assert.equal(new Set(insertedChecks.map((check) => check.run_id)).size, 2);
   const submit = await post('/api/submit', { runId: run.body.id, humanValidated: true });
   assert.equal(submit.status, 400);
   const policyCapture = {
@@ -244,9 +269,9 @@ try {
   const blocked = await post('/api/run', { mode: 'lab' });
   assert.equal(blocked.status, 400);
   assert.match(blocked.body.error, /Senso did not return a usable passage/);
-  assert.equal(insertedChecks.length, 2, 'a mismatched Senso source must stop before probing');
-  assert.deepEqual(stubs, { guildStarts: 1, guildCompletes: 1, akash: 2, clickhouse: 3, senso: 2 });
-  console.log('Smoke passed: local lab sample, live gate, browser capture, four sponsor HTTP adapters, lab probe, ClickHouse verdict, submission guard.');
+  assert.equal(insertedChecks.length, 5, 'a mismatched Senso source must stop before probing');
+  assert.deepEqual(stubs, { guildStarts: 1, guildCompletes: 1, akash: 2, clickhouse: 5, senso: 2 });
+  console.log('Smoke passed: exposed and protected owned training cases, live gate, browser capture, four sponsor HTTP adapters, ClickHouse verdicts, submission guard.');
 } finally {
   app.kill();
   stub.close();

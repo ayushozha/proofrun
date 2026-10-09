@@ -292,6 +292,56 @@ export async function probeProject(mode, port) {
   return [owner, other, anonymous];
 }
 
+/** Test an owned fixture with two isolated identities and a server-held private sentinel. */
+export async function probeTrainingCase(trainingCase, port) {
+  if (!Number.isInteger(port) || port < 1 || port > 65535 ||
+    ![trainingCase?.id, trainingCase?.ownerToken, trainingCase?.otherToken]
+      .every((value) => typeof value === 'string' && /^[a-f0-9]{36}$/.test(value))) {
+    throw new Error('Invalid training case.');
+  }
+  const url = `http://127.0.0.1:${port}/training/projects/${trainingCase.id}`;
+  const read = async (actor, bearer) => {
+    let response;
+    try {
+      response = await fetch(url, {
+        method: 'GET', redirect: 'error', signal: AbortSignal.timeout(5000),
+        headers: bearer ? { Authorization: `Bearer ${bearer}`, Accept: 'application/json' } : { Accept: 'application/json' },
+      });
+    } catch { return { actor, status: 0, body: null }; }
+    let body = null;
+    try { body = await response.json(); } catch { /* A denial may have no JSON body. */ }
+    return { actor, status: response.status, body };
+  };
+  const owner = await read('owner', trainingCase.ownerToken);
+  const sentinel = owner.status === 200 && owner.body?.id === trainingCase.id &&
+    typeof owner.body?.privateSentinel === 'string' && /^[a-f0-9]{36}$/.test(owner.body.privateSentinel)
+    ? owner.body.privateSentinel : null;
+  const ownerCheck = {
+    actor: 'owner', status: owner.status, ownerMarkerPresent: Boolean(sentinel),
+    detail: sentinel ? 'Owner received the server-held private sentinel.' : 'Owner control did not return a valid private sentinel.',
+  };
+  if (!sentinel) return [ownerCheck, {
+    actor: 'other', status: 0, ownerMarkerPresent: false, detail: 'Skipped because the owner control failed.',
+  }];
+  const other = await read('other', trainingCase.otherToken);
+  const otherMatched = other.status === 200 && other.body?.id === trainingCase.id &&
+    other.body?.privateSentinel === sentinel;
+  const otherCheck = {
+    actor: 'other', status: other.status, ownerMarkerPresent: otherMatched,
+    detail: otherMatched ? 'Isolated other account received the owner private sentinel.'
+      : 'Other account did not receive the owner private sentinel.',
+  };
+  if (otherMatched) return [ownerCheck, otherCheck];
+  const anonymous = await read('anonymous');
+  const anonymousMatched = anonymous.status === 200 && anonymous.body?.id === trainingCase.id &&
+    anonymous.body?.privateSentinel === sentinel;
+  return [ownerCheck, otherCheck, {
+    actor: 'anonymous', status: anonymous.status, ownerMarkerPresent: anonymousMatched,
+    detail: anonymousMatched ? 'Anonymous request received the owner private sentinel.'
+      : 'Anonymous request did not receive the owner private sentinel.',
+  }];
+}
+
 export function draftReport({ mode, verdict, checks }) {
   if (verdict !== 'candidate') return null;
   const owner = checks.find((item) => item.actor === 'owner');

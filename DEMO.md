@@ -1,35 +1,34 @@
 # ProofRun three-minute demo
 
-The primary demo is a bounded Acronis HackerOne check. ProofRun reads the current program scope, asks the four sponsor services to evaluate a fixed plan, then sends **one inert, read-only search-marker request** to the public search endpoint. A reflected marker alone is inconclusive, so the result creates no vulnerability report and submits nothing.
+Lead with the **owned-site audit of ayushojha.com**. ProofRun accepts that exact URL, checks a private local checkout of the owner's GitHub source with Semgrep CE, and makes one anonymous, read-only `GET /api/access` request to the live site. Senso supplies the pinned policy; Guild gates the run; AkashML chooses the bounded check and later reviews its result; ClickHouse stores and queries normalized finding metadata. The owner authorized testing their site. The source repository stays private and is not part of the public ProofRun repository.
 
-Observed live result: the HackerOne scope check passed; one Acronis search GET returned HTTP 200; the response exceeded ProofRun's 256 KiB read cap; the marker was **not seen in the captured first 256 KiB**. The ClickHouse query took 96 ms. This does not establish whether the marker appears later in the response, and no vulnerability report was generated.
+The recorded owned-site run found **11 Semgrep source candidates** for broad signed-in-user access callbacks. The anonymous `/api/access` request returned **HTTP 200**. These facts do **not** prove that the same source revision is deployed, that any account can access another person's records, or that the permissions violate the site's intended policy. Label the result **source only**. ProofRun neither creates nor submits a HackerOne report for this run.
 
-Record a new live run only after the updated Senso policy and Guild gate are published and the H1 API, AkashML, and ClickHouse connections are configured. Do not rerun the target request just to improve the recording. If a gate fails, show the failure honestly; the previously verified Vercel policy watch is a separate fallback demonstration, not evidence of an Acronis probe.
+Keep the recording on the owned-site result for the full three minutes. If a paired training result has been recorded separately, it can be used as a brief cutaway: its intentionally exposed case produces a candidate and its protected case produces the expected denial. That proves the detector distinguishes those controlled cases, not that the hosted site has the same defect.
 
 ## Before recording
 
-1. Seed the updated ProofRun policy in Senso, point the local configuration at its content ID, publish the Guild gate, and restart the local server. Check that the Acronis plan is accepted before any target request.
-2. Open the local app at http://127.0.0.1:8787/ and confirm the Acronis URL is selected. The intake should identify its source as the HackerOne API and show eligible Acronis scope.
-3. Keep the terminal, browser password manager, and ignored .env off-screen. The video should show only the app, sourced policy, execution trace, and result.
-4. If recording a new execution, run the live check once and save its result and source links. If showing the prior result, call it a recorded run. A failed gate or unreachable search page is a truthful result; do not substitute a synthetic lab trace.
+1. Open the verified local app at `http://127.0.0.1:8789/` (or the URL printed by `npm start` after a restart). Verify the owned-site intake and the current sponsor status. The private checkout, Senso policy content ID, Guild gate, AkashML, ClickHouse, and Semgrep must be configured for a fresh run. If a gate fails, show the failure rather than substituting a training result.
+2. If the verified result remains open in Edge, show it there. Reloading clears the browser's result state; a fresh run repeats the Semgrep scan and the single public `GET /api/access`. If its finding count, status, or latency changes, narrate the actual values on screen.
+3. Keep the ignored `.env`, terminals containing credentials, private GitHub source, browser password manager, and any personal records off-screen. Show only the ProofRun UI, normalized findings, sponsor trace, and public response metadata.
+4. Record a shareable video of about three minutes. Check the video link in a signed-out browser before adding it to the hackathon submission.
 
-## Shot list
+## Shot list and exact narration
 
 | Time | Show | Say |
 | --- | --- | --- |
-| 0:00–0:20 | Acronis URL, supported checks, single-request boundary | “Give ProofRun a HackerOne program URL. Today it supports this bounded Acronis check and a separate Vercel adapter.” |
-| 0:20–0:45 | Review current scope and policy, with HackerOne API source | “The target and permitted action come from the live program scope and a fixed policy; reviewing scope sends no target request.” |
-| 0:45–1:10 | Start one live check; show Senso, Guild, and AkashML gates | “The services evaluate the plan before the request. A deny stops execution.” |
-| 1:10–1:40 | Public-search evidence: HTTP 200, 256 KiB cap, marker field, inconclusive verdict | “One inert search-marker request returned HTTP 200. The response exceeded our 256 KiB cap; the marker was not seen in the bytes we read. We cannot infer what the rest of the response contained.” |
-| 1:40–2:05 | ClickHouse event, 96 ms query, and sponsor trace | “The observation and sponsor decisions are recorded for review. This query took 96 milliseconds.” |
-| 2:05–2:25 | Result and report panel | “This check is inconclusive. ProofRun produces no report and does not submit one.” |
-| 2:25–2:45 | Optional Vercel policy-watch history | “Separately, ProofRun monitors structured program-scope changes. This is monitoring, not a vulnerability finding.” |
-| 2:45–3:00 | Vercel account-check gate and repo link | “The Vercel project-access check remains gated until two distinct owned accounts are available.” |
+| 0:00–0:20 | ProofRun landing page; enter `https://ayushojha.com` | “ProofRun starts with a target URL. This is my own website, and I authorized this audit. I want an agent to investigate a concrete security question and keep its conclusions tied to evidence.” |
+| 0:20–0:45 | Owned-site intake; source and bounded check | “For this target, ProofRun uses my private GitHub source checkout and allows one anonymous, read-only request to the site's public access endpoint. It does not fetch private records or mutate the site.” |
+| 0:45–1:15 | Run or recorded run; sponsor trace in order | “Senso returns the pinned operating policy. Guild approves the bounded job. AkashML selects the source access-rule check. Semgrep scans the configured checkout; ClickHouse records and queries normalized findings. AkashML reviews the result, and Guild acknowledges completion.” |
+| 1:15–1:50 | Eleven findings; highlight ContactSubmissions read/update and Products create/update | “Semgrep found eleven source-level candidates. Here are two worth reviewing: signed-in users appear broadly permitted to read or update contact submissions, and to create or update products. These are code matches, not yet confirmed exploits.” |
+| 1:50–2:20 | Source revision, `/api/access` HTTP status, confidence label | “The live site returned HTTP 200 for an anonymous access-capability request. That only shows this public endpoint responded. I have not proven which source revision is deployed, and I have not shown an unauthorized account reading or changing data. ProofRun marks this source only.” |
+| 2:20–2:40 | ClickHouse query timing and AkashML review note; no report state | “ClickHouse makes the run and its findings inspectable; the query time shown here comes from this run. The review note lists what a human should validate next. There is no HackerOne report or automatic submission.” |
+| 2:40–3:00 | Stay on the validation questions and source-only label | “The next step is a controlled test with a low-privilege account and confirmation of the deployed revision. Until then, ProofRun stops at a source candidate. It does not turn a plausible code pattern into a vulnerability claim.” |
 
-If a new run differs from the observed result, narrate its actual status and latency. Keep the distinction between an attempted request, a bounded HTTP response observation, and a verified finding clear.
+Speak to the screen if a new run differs. Do not read out a fixed query latency, commit SHA, or finding count unless it is visible in the recorded run. Use the paired training result only as an optional pre-recorded cutaway, never as evidence about the hosted site.
 
 ## Submission wording
 
-Use the recorded run's actual evidence. A suitable description of the observed run is: “ProofRun accepted the Acronis HackerOne URL, verified current scope through the HackerOne API, gated one read-only public-search marker request through Senso, Guild, and AkashML, and stored the observed outcome in ClickHouse. The target returned HTTP 200; its response exceeded the 256 KiB read cap, and no marker appeared in the captured prefix. The check is inconclusive and produced no report.” If a new run differs or a provider fails, name that outcome instead.
+“ProofRun audited an owner-authorized website from its private GitHub source checkout. A Senso policy and Guild agent gated a bounded plan selected and reviewed by AkashML. Semgrep found 11 source-level access-rule candidates; ClickHouse stored and queried normalized findings. One anonymous `GET /api/access` to the live site returned HTTP 200. The result is source only: no unauthorized read or write against the deployed site was demonstrated, and no HackerOne report was submitted. A separate paired training target demonstrates that the detector distinguishes an intentionally exposed authorization case from a protected one.”
 
-List sponsor prize categories only for real integrations shown in the trace. A Semgrep prize claim requires a genuine Semgrep finding; running a scan alone is not a finding.
+Use the recorded run's actual values if they change. The earlier Acronis search probe and Vercel policy watch are separate ProofRun capabilities; they are not evidence for the owned-site finding. Select sponsor prizes only for integrations actually shown working in the recording.
