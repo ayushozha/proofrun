@@ -3,6 +3,7 @@ import http from 'node:http';
 import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { once } from 'node:events';
+import { probeProject } from '../server/core.mjs';
 
 const stubs = { guildStarts: 0, guildCompletes: 0, akash: 0, clickhouse: 0, senso: 0 };
 let returnedPolicyId = 'stub-policy';
@@ -16,9 +17,13 @@ const stub = http.createServer(async (request, response) => {
     stubs.akash++;
     const explanation = JSON.parse(body).messages[0].content.includes('Explain an owned-account');
     const planInput = explanation ? null : JSON.parse(JSON.parse(body).messages[1].content);
+    if (planInput) {
+      assert.equal(planInput.mode, 'lab');
+      assert.equal(planInput.scopeApproved, false, 'lab must not claim HackerOne scope approval');
+    }
     const content = explanation
       ? { summary: 'Owner and other account both returned HTTP 200 with the owner marker.', validationQuestions: ['Which fields are private in the other-account response?'] }
-      : { check: planInput.policySource?.passage ? 'project_access' : 'stop', rationale: 'Approved bounded check.', sourceContentId: planInput.policySource?.contentId };
+      : { check: planInput.mode === 'lab' && planInput.policySource?.passage ? 'project_access' : 'stop', rationale: 'Approved bounded check.', sourceContentId: planInput.policySource?.contentId };
     response.end(JSON.stringify({ choices: [{ message: { content: JSON.stringify(content) } }] }));
   } else if (url.pathname.endsWith('/org/search/context')) {
     stubs.senso++;
@@ -35,10 +40,16 @@ const stub = http.createServer(async (request, response) => {
     const payload = JSON.parse(JSON.parse(body).initial_prompt);
     const id = randomUUID();
     sessions.set(id, payload);
-    if (payload.phase === 'start') stubs.guildStarts++;
+    if (payload.phase === 'start') {
+      assert.equal(payload.mode, 'lab');
+      assert.equal(payload.scopeApproved, false, 'lab must not claim HackerOne scope approval');
+      stubs.guildStarts++;
+    }
     else stubs.guildCompletes++;
     response.end(JSON.stringify({ id }));
   } else if (url.pathname.includes('/sessions/') && url.pathname.endsWith('/events')) {
+    assert.equal(url.searchParams.get('types'), 'runtime_done');
+    assert.equal(url.searchParams.get('limit'), '1');
     const id = url.pathname.split('/')[3];
     const payload = sessions.get(id);
     const decision = payload?.phase === 'start'
@@ -89,16 +100,74 @@ try {
     await new Promise((resolve) => setTimeout(resolve, 50));
   }
   assert(ready, 'app server started');
+  const previous = ['VERCEL_PROJECT_ID', 'VERCEL_OWNER_TOKEN', 'VERCEL_OTHER_TOKEN', 'HACKERONE_API_USERNAME']
+    .map((name) => [name, process.env[name]]);
+  const fetchBeforeTokenCheck = globalThis.fetch;
+  try {
+    process.env.VERCEL_PROJECT_ID = 'prj_sameaccount';
+    process.env.HACKERONE_API_USERNAME = 'ayushojha';
+    process.env.VERCEL_OWNER_TOKEN = 'same-token';
+    process.env.VERCEL_OTHER_TOKEN = 'same-token';
+    globalThis.fetch = () => { throw new Error('A duplicate-token check must not make a Vercel request.'); };
+    await assert.rejects(probeProject('live', appPort), /tokens must be different/);
+
+    process.env.VERCEL_OWNER_TOKEN = 'owner-token';
+    process.env.VERCEL_OTHER_TOKEN = 'other-token';
+    let projectReads = 0;
+    let otherId = 'owner-id';
+    let ownerEmail = 'ayushojha+owner@wearehackerone.com';
+    globalThis.fetch = (url, options) => {
+      if (String(url).endsWith('/v2/user')) {
+        const owner = options.headers.Authorization === 'Bearer owner-token';
+        return Promise.resolve(Response.json({ user: {
+          id: owner ? 'owner-id' : otherId,
+          email: owner ? ownerEmail : 'ayushojha+other@wearehackerone.com',
+        } }));
+      }
+      projectReads++;
+      throw new Error('An invalid account pair must not read a Vercel project.');
+    };
+    await assert.rejects(probeProject('live', appPort), /two different user accounts/);
+    assert.equal(projectReads, 0);
+    otherId = 'other-id';
+    ownerEmail = 'ayushojha+owner@wasmer.io';
+    await assert.rejects(probeProject('live', appPort), /HackerOne email alias/);
+    assert.equal(projectReads, 0);
+
+    ownerEmail = 'ayushojha+owner@wearehackerone.com';
+    globalThis.fetch = (url, options) => {
+      if (String(url).endsWith('/v2/user')) {
+        const owner = options.headers.Authorization === 'Bearer owner-token';
+        return Promise.resolve(Response.json({ user: {
+          id: owner ? 'owner-id' : 'other-id',
+          email: owner ? ownerEmail : 'ayushojha+other@wearehackerone.com',
+        } }));
+      }
+      projectReads++;
+      return Promise.resolve(options.headers.Authorization === 'Bearer owner-token'
+        ? Response.json({ id: 'prj_sameaccount' })
+        : Response.json({}, { status: 404 }));
+    };
+    const checks = await probeProject('live', appPort);
+    assert.deepEqual(checks.map(({ status }) => status), [200, 404, 404]);
+    assert.equal(projectReads, 3);
+  } finally {
+    globalThis.fetch = fetchBeforeTokenCheck;
+    for (const [name, value] of previous) {
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+    }
+  }
   const invalid = await post('/api/intake', { url: 'https://hackerone.com/other' });
   assert.equal(invalid.status, 400);
-  const capture = await post('/api/capture', {
-    programUrl: 'https://hackerone.com/vercel', capturedAt: new Date().toISOString(),
-    visibleText: 'Vercel REST API. Cross-tenant testing: always use two accounts you own. Scanner rate limits: 5 QPS.',
-  });
-  assert.equal(capture.status, 200);
-  const intake = await post('/api/intake', { url: 'https://hackerone.com/vercel' });
-  assert.equal(intake.status, 200);
-  assert.equal(intake.body.source, 'browser');
+  const sample = await post('/api/intake', { url: 'https://hackerone.com/vercel', sampleLab: true });
+  assert.equal(sample.status, 200);
+  assert.equal(sample.body.source, 'local_sample');
+  assert.equal(sample.body.labOnly, true);
+  const sampleLive = await post('/api/run', { mode: 'live' });
+  assert.equal(sampleLive.status, 400);
+  assert.match(sampleLive.body.error, /local sample is lab-only/);
+  assert.equal(stubs.guildStarts, 0, 'lab sample must not authorize a live probe');
   const run = await post('/api/run', { mode: 'lab' });
   assert.equal(run.status, 200);
   assert.equal(run.body.verdict, 'candidate');
@@ -113,13 +182,21 @@ try {
   assert(insertedChecks.every((check) => check.mode === 'lab' && check.program === 'vercel'));
   const submit = await post('/api/submit', { runId: run.body.id, humanValidated: true });
   assert.equal(submit.status, 400);
+  const capture = await post('/api/capture', {
+    programUrl: 'https://hackerone.com/vercel', capturedAt: new Date().toISOString(),
+    visibleText: 'Vercel REST API. Cross-tenant testing: always use two accounts you own. Scanner rate limits: 5 QPS.',
+  });
+  assert.equal(capture.status, 200);
+  const intake = await post('/api/intake', { url: 'https://hackerone.com/vercel' });
+  assert.equal(intake.status, 200);
+  assert.equal(intake.body.source, 'browser');
   returnedPolicyId = 'wrong-policy';
   const blocked = await post('/api/run', { mode: 'lab' });
   assert.equal(blocked.status, 400);
   assert.match(blocked.body.error, /Senso did not return a usable passage/);
   assert.equal(insertedChecks.length, 2, 'a mismatched Senso source must stop before probing');
   assert.deepEqual(stubs, { guildStarts: 1, guildCompletes: 1, akash: 2, clickhouse: 3, senso: 2 });
-  console.log('Smoke passed: browser capture, scoped intake, four sponsor HTTP adapters, lab probe, ClickHouse verdict, submission guard.');
+  console.log('Smoke passed: local lab sample, live gate, browser capture, four sponsor HTTP adapters, lab probe, ClickHouse verdict, submission guard.');
 } finally {
   app.kill();
   stub.close();

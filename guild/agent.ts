@@ -11,11 +11,20 @@ const outputSchema = z.object({ type: z.literal("text"), text: z.string() })
 async function run(input: z.infer<typeof inputSchema>) {
   let decision: { allow: boolean; decision: string; verdict?: string } = { allow: false, decision: "stop" }
   try {
-    const event = JSON.parse(input.text)
+    // Guild prepends session metadata; the caller's compact JSON is the final block.
+    const event = JSON.parse(input.text.slice(input.text.lastIndexOf("{")))
     const validRun = /^[a-zA-Z0-9_-]{8,80}$/.test(event.id)
     if (validRun && event.programHandle === "vercel") {
-      if (event.phase === "start" && event.scopeApproved === true && event.check === "project_access") {
+      const boundedStart = event.phase === "start" && event.check === "project_access" &&
+        (event.mode === "lab" || (event.mode === "live" && event.scopeApproved === true))
+      const watchStart = event.phase === "start" && event.mode === "watch" && event.check === "policy_watch"
+      if (watchStart) {
+        decision = { allow: true, decision: "policy_watch" }
+      } else if (boundedStart) {
         decision = { allow: true, decision: "project_access" }
+      } else if (event.phase === "complete" && event.mode === "watch" &&
+        ["baseline", "changed", "unchanged"].includes(event.verdict)) {
+        decision = { allow: true, decision: "recorded", verdict: event.verdict }
       } else if (event.phase === "complete" && ["candidate", "expected", "inconclusive"].includes(event.verdict)) {
         decision = { allow: true, decision: "recorded", verdict: event.verdict }
       }
@@ -27,7 +36,7 @@ async function run(input: z.infer<typeof inputSchema>) {
 }
 
 export default agent({
-  description: "Gates one bounded owned-account Vercel authorization check and records its outcome.",
+  description: "Gates bounded Vercel checks and read-only HackerOne scope monitoring, then records outcomes.",
   inputSchema,
   outputSchema,
   tools: noTools,

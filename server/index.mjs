@@ -3,8 +3,8 @@ import { readFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
-import { sponsorStatus, contextFromSenso, planWithAkash, explainWithAkash, recordWithClickHouse, runOnGuild, notifyGuild } from './sponsors.mjs';
-import { parseProgramUrl, captureIsUsable, fetchProgramScope, probeProject, draftReport, validateSubmission, submitToHackerOne } from './core.mjs';
+import { sponsorStatus, contextFromSenso, planWithAkash, planWatchWithAkash, explainWithAkash, explainWatchWithAkash, prepareClickHouse, recordWithClickHouse, compareWatchWithClickHouse, storeWatchWithClickHouse, runOnGuild, notifyGuild } from './sponsors.mjs';
+import { parseProgramUrl, captureIsUsable, fetchProgramScope, fetchProgramScopeSnapshot, probeProject, draftReport, validateSubmission, submitToHackerOne } from './core.mjs';
 
 const root = new URL('../', import.meta.url);
 const envPath = fileURLToPath(new URL('.env', root));
@@ -14,6 +14,7 @@ const origin = `http://127.0.0.1:${port}`;
 const runs = new Map();
 let capture = null;
 let intake = null;
+let watchRunning = false;
 
 function json(response, status, body, extra = {}) {
   response.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', ...extra });
@@ -59,6 +60,24 @@ function status() {
 
 async function handleIntake(body) {
   const programUrl = parseProgramUrl(body.url);
+  if (body.sampleLab === true) {
+    intake = { programUrl, browserReady: false, scope: null, labOnly: true, createdAt: Date.now() };
+    return {
+      program: { handle: 'vercel', name: 'Vercel scenario (local simulation)' },
+      policy: {
+        asset: 'Local training service only',
+        rules: [
+          'This sample is synthetic and does not represent current HackerOne or Vercel policy.',
+          'The lab check reads only the local training project.',
+          'Lab observations are never reportable as a Vercel vulnerability.',
+        ],
+      },
+      scope: ['Local fixture: prj_proofrun_lab'],
+      source: 'local_sample',
+      labOnly: true,
+      limitations: ['Live mode requires a fresh signed-in browser capture and HackerOne API scope.', 'This sample can run only against the local lab.'],
+    };
+  }
   const browserReady = capture?.programUrl === programUrl && captureIsUsable(capture);
   const apiReady = status().hackerone.apiConfigured;
   if (!browserReady && !apiReady) {
@@ -99,6 +118,7 @@ async function handleRun(body) {
   if (Date.now() - intake.createdAt > 30 * 60 * 1000) throw new Error('Program intake expired. Capture the current scope again.');
   const mode = body.mode;
   if (!['lab', 'live'].includes(mode)) throw new Error('Choose lab or live mode.');
+  if (mode === 'live' && intake.labOnly) throw new Error('The local sample is lab-only. Capture the current program and HackerOne API scope before a live run.');
   if (!sponsorStatus().ready) throw new Error('Guild, AkashML, ClickHouse, and Senso must all be configured before a run.');
   if (mode === 'live') {
     if (!intake.browserReady || !intake.scope) throw new Error('A live run requires signed-in browser capture and HackerOne structured scope.');
@@ -108,17 +128,18 @@ async function handleRun(body) {
 
   const id = randomUUID();
   const sponsorTrace = [];
-  const scopeApproved = mode === 'lab' || Boolean(intake.browserReady && intake.scope);
+  const scopeApproved = mode === 'live' && Boolean(intake.browserReady && intake.scope);
   const policyContext = await contextFromSenso();
   sponsorTrace.push({ tool: 'Senso', status: 'retrieved', detail: `Policy source ${policyContext.contentId}, version ${policyContext.versionId}` });
-  const guild = await runOnGuild('start', { id, programHandle: 'vercel', scopeApproved });
+  const guild = await runOnGuild('start', { id, programHandle: 'vercel', mode, scopeApproved });
   sponsorTrace.push({ tool: 'Guild', status: guild.allow ? 'approved' : 'stopped', detail: `Policy gate session ${guild.sessionId}` });
   if (!guild.allow) throw new Error('Guild declined this bounded check.');
 
-  const plan = await planWithAkash({ programHandle: 'vercel', scopeApproved, policyContext });
+  const plan = await planWithAkash({ programHandle: 'vercel', mode, scopeApproved, policyContext });
   sponsorTrace.push({ tool: 'AkashML', status: plan.check === 'project_access' ? 'selected' : 'stopped', detail: plan.rationale });
   if (plan.check !== 'project_access') throw new Error('AkashML did not select the approved project-access check.');
 
+  await prepareClickHouse();
   const checks = await probeProject(mode, port);
   const analysis = await recordWithClickHouse({ id, programHandle: 'vercel', mode, checks });
   sponsorTrace.push({ tool: 'ClickHouse', status: 'queried', detail: `${analysis.recorded} normalized observations; verdict ${analysis.verdict}; query ${analysis.queryLatencyMs} ms` });
@@ -135,6 +156,43 @@ async function handleRun(body) {
   };
   runs.set(id, run);
   return { id, mode, verdict: run.verdict, evidence: checks, sponsorTrace, reportDraft, reviewNote, queryLatencyMs: run.queryLatencyMs, submissionEligible: run.submissionEligible };
+}
+
+async function handleWatch(body) {
+  parseProgramUrl(body.url);
+  if (!sponsorStatus().ready || !status().hackerone.apiConfigured) {
+    throw new Error('Guild, AkashML, ClickHouse, Senso, and HackerOne API must be configured for policy watch.');
+  }
+  if (watchRunning) throw new Error('A policy-watch run is already in progress.');
+  watchRunning = true;
+  try {
+    const id = randomUUID();
+    const sponsorTrace = [];
+    const policyContext = await contextFromSenso('policy_watch');
+    sponsorTrace.push({ tool: 'Senso', status: 'retrieved', detail: `Policy source ${policyContext.contentId}, version ${policyContext.versionId}` });
+    const guild = await runOnGuild('start', { id, programHandle: 'vercel', mode: 'watch' });
+    sponsorTrace.push({ tool: 'Guild', status: guild.allow ? 'approved' : 'stopped', detail: `Read-only gate session ${guild.sessionId}` });
+    if (!guild.allow) throw new Error('Guild declined the policy watch.');
+    const plan = await planWatchWithAkash(policyContext);
+    sponsorTrace.push({ tool: 'AkashML', status: plan.check === 'policy_watch' ? 'selected' : 'stopped', detail: plan.rationale });
+    if (plan.check !== 'policy_watch') throw new Error('AkashML did not select the policy watch.');
+
+    const { scopes, ...source } = await fetchProgramScopeSnapshot();
+    sponsorTrace.push({ tool: 'HackerOne', status: 'fetched', detail: `${scopes.length} structured scopes fetched from the program API.` });
+    const comparison = await compareWatchWithClickHouse({ id, source, scopes });
+    sponsorTrace.push({ tool: 'ClickHouse', status: 'queried', detail: `${comparison.status} against stored history; query ${comparison.queryLatencyMs} ms.` });
+    const summary = await explainWatchWithAkash({ source, ...comparison });
+    sponsorTrace.push({ tool: 'AkashML', status: 'explained', detail: 'Produced a bounded, sourced scope-change alert.' });
+    await notifyGuild({ id, programHandle: 'vercel', mode: 'watch', verdict: comparison.status });
+    sponsorTrace.push({ tool: 'Guild', status: 'acknowledged', detail: 'Policy-watch outcome recorded by the agent.' });
+    await storeWatchWithClickHouse({ id, source, scopes });
+    sponsorTrace.push({ tool: 'ClickHouse', status: 'stored', detail: `${scopes.length} normalized scope entries persisted for the next watch.` });
+    return { id, mode: 'watch', source, status: comparison.status, scopeCount: comparison.scopeCount,
+      added: comparison.added, removed: comparison.removed, summary, sponsorTrace,
+      queryLatencyMs: comparison.queryLatencyMs };
+  } finally {
+    watchRunning = false;
+  }
 }
 
 async function handleSubmit(body) {
@@ -174,6 +232,7 @@ const server = http.createServer(async (request, response) => {
       return json(response, 200, { captured: true, programUrl }, cors);
     }
     if (request.method === 'POST' && path === '/api/intake') return json(response, 200, await handleIntake(await readJson(request)));
+    if (request.method === 'POST' && path === '/api/watch') return json(response, 200, await handleWatch(await readJson(request)));
     if (request.method === 'POST' && path === '/api/run') return json(response, 200, await handleRun(await readJson(request)));
     if (request.method === 'POST' && path === '/api/submit') return json(response, 200, await handleSubmit(await readJson(request)));
     if (request.method === 'GET' && path === '/lab/v9/projects/prj_proofrun_lab') {
