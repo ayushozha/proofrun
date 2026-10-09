@@ -14,7 +14,14 @@ async function run(input: z.infer<typeof inputSchema>) {
     // Guild prepends session metadata; the caller's compact JSON is the final block.
     const event = JSON.parse(input.text.slice(input.text.lastIndexOf("{")))
     const validRun = /^[a-zA-Z0-9_-]{8,80}$/.test(event.id)
-    if (validRun && event.programHandle === "vercel") {
+    if (validRun && event.programHandle === "acronis") {
+      if (event.phase === "start" && event.mode === "live" &&
+        event.check === "search_reflection" && event.scopeApproved === true) {
+        decision = { allow: true, decision: "search_reflection" }
+      } else if (event.phase === "complete" && event.mode === "live" && event.verdict === "inconclusive") {
+        decision = { allow: true, decision: "recorded", verdict: "inconclusive" }
+      }
+    } else if (validRun && event.programHandle === "vercel") {
       const boundedStart = event.phase === "start" && event.check === "project_access" &&
         (event.mode === "lab" || (event.mode === "live" && event.scopeApproved === true))
       const watchStart = event.phase === "start" && event.mode === "watch" && event.check === "policy_watch"
@@ -36,7 +43,7 @@ async function run(input: z.infer<typeof inputSchema>) {
 }
 
 export default agent({
-  description: "Gates bounded Vercel checks and read-only HackerOne scope monitoring, then records outcomes.",
+  description: "Gates bounded Vercel and Acronis checks plus read-only HackerOne scope monitoring, then records outcomes.",
   inputSchema,
   outputSchema,
   tools: noTools,

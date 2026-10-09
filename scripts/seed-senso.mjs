@@ -11,7 +11,7 @@ if (!key) throw new Error('Set SENSO_API_KEY in the project .env before seeding 
 
 const base = 'https://apiv2.senso.ai/api/v1/';
 const policy = await readFile(new URL('../docs/proofrun-policy.md', import.meta.url), 'utf8');
-const query = "What are ProofRun's rules for read-only HackerOne policy-watch runs and bounded Vercel project-access checks?";
+const query = "What are ProofRun's rules for read-only HackerOne policy watch, bounded Vercel project access, and the Acronis public search marker check?";
 
 async function request(path, options = {}) {
   let response;
