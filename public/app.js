@@ -33,6 +33,7 @@ function setBusy(busy, button, activeLabel) {
   $('program-url').disabled = busy;
   $('program-acronis').disabled = busy;
   $('program-vercel').disabled = busy;
+  $('program-owned').disabled = busy;
   $('lab-shortcut').disabled = busy;
   updateRunButton();
   updateCopyButton();
@@ -48,7 +49,9 @@ function connected(value) {
 function selectedProgram() {
   try {
     const url = new URL($('program-url').value.trim());
-    if (url.protocol !== 'https:' || url.hostname !== 'hackerone.com') return null;
+    if (url.protocol !== 'https:') return null;
+    if (url.hostname === 'ayushojha.com' && /^\/?$/.test(url.pathname) && !url.search && !url.hash) return 'owned_site';
+    if (url.hostname !== 'hackerone.com') return null;
     if (/^\/acronis\/?$/.test(url.pathname)) return 'acronis';
     if (/^\/vercel\/?$/.test(url.pathname)) return 'vercel';
   } catch {}
@@ -59,47 +62,69 @@ function renderProgramChoice(resetMode = false) {
   const program = selectedProgram();
   const acronis = program === 'acronis';
   const vercel = program === 'vercel';
+  const owned = program === 'owned_site';
   $('program-acronis').classList.toggle('is-selected', acronis);
   $('program-vercel').classList.toggle('is-selected', vercel);
+  $('program-owned').classList.toggle('is-selected', owned);
   $('program-acronis').setAttribute('aria-pressed', String(acronis));
   $('program-vercel').setAttribute('aria-pressed', String(vercel));
+  $('program-owned').setAttribute('aria-pressed', String(owned));
   const source = $('program-source-link');
   source.hidden = !program;
-  if (program) source.href = `https://hackerone.com/${program}`;
+  if (program) {
+    source.href = owned ? 'https://ayushojha.com' : `https://hackerone.com/${program}`;
+    source.textContent = owned ? 'Open the owned site' : 'Open the current program policy';
+  }
   $('intake-description').textContent = acronis
     ? 'Acronis loads current structured scope from HackerOne. Its public-search check does not need a browser extension or second account.'
     : vercel
       ? 'Vercel needs current HackerOne scope plus a signed-in policy capture from the ProofRun browser extension.'
-      : 'Enter one of the two supported HackerOne program URLs to review its current boundary.';
-  $('capture-heading-label').textContent = acronis ? 'HackerOne API' : vercel ? 'Browser extension + API' : 'Program source';
+      : owned
+        ? 'Review the owned-site boundary before scanning its configured GitHub checkout and checking public route presence.'
+        : 'Enter a supported HackerOne program URL or the owned-site URL to review its boundary.';
+  $('capture-heading-label').textContent = acronis ? 'HackerOne API' : vercel ? 'Browser extension + API' : owned ? 'GitHub source + site' : 'Program source';
   $('capture-instructions').textContent = acronis
     ? 'Load the current Acronis program and eligible structured scope. No target request happens at this step.'
     : vercel
       ? 'Click the extension on the signed-in HackerOne page first. This button then loads the capture and API scope for review.'
-      : 'Choose Acronis or Vercel to see the required source and check.';
-  $('intake-button').dataset.label = acronis ? 'Review current scope →' : 'Load and review scope →';
+      : owned
+        ? 'Prepare the source audit. The run will scan the configured checkout and read only public route status.'
+        : 'Choose a supported check to see its required source.';
+  $('intake-button').dataset.label = owned ? 'Review owned site →' : acronis ? 'Review current scope →' : 'Load and review scope →';
   if (!state.busy) $('intake-button').textContent = $('intake-button').dataset.label;
   $('setup-details').hidden = !vercel;
   $('sample-button').hidden = !vercel;
   $('mode-lab').disabled = !vercel;
   if (!vercel) $('mode-live').checked = true;
   else if (resetMode) $('mode-lab').checked = true;
+  $('live-mode-title').textContent = owned ? 'Owned-site source audit' : 'Bounded live check';
+  $('live-mode-hint').textContent = owned ? 'SOURCE' : 'SCOPED';
   $('live-mode-description').textContent = acronis
     ? 'One read-only public-search marker request. Current Acronis scope required.'
     : vercel
       ? 'Researcher-owned Vercel accounts. Current policy and scope required.'
-      : 'Choose a supported program to see its bounded check.';
+      : owned
+        ? 'Inspect GitHub access rules and read only public route status. No exploit attempt.'
+        : 'Choose a supported program to see its bounded check.';
   $('run-description').textContent = acronis
     ? 'Acronis makes one inert, read-only search-marker request. Reflection alone is not a vulnerability.'
     : vercel
       ? 'Vercel makes a limited project-read request through two accounts you own. The local training check compares exposed and protected paths.'
-      : 'Each program has its own bounded check. Review the current scope before choosing a mode.';
+      : owned
+        ? 'The owned-site audit identifies source-level authorization candidates and checks live route presence without accessing records.'
+        : 'Each program has its own bounded check. Review its source before choosing a mode.';
+  $('report-title').textContent = owned ? 'Verify before any report' : 'Review the report draft';
+  $('report-description').textContent = owned
+    ? 'A source-level candidate is not a live exploit or a HackerOne finding. Controlled account verification is still needed.'
+    : 'A draft appears only for a candidate that needs human verification. Ordinary search-marker reflection produces no report.';
   $('handoff-note').hidden = !vercel;
   if (!state.run) {
     $('report-guidance').textContent = acronis
       ? 'The public-search observation will not become a report from ordinary marker reflection.'
-      : 'Run a check to generate a draft. A human must verify a real finding before submission.';
-    $('submit-note').textContent = acronis ? 'Reflection alone is not a vulnerability; no report will be submitted.' : 'A lab run can never be submitted.';
+      : owned
+        ? 'Source candidates need controlled live verification. This audit creates no HackerOne report.'
+        : 'Run a check to generate a draft. A human must verify a real finding before submission.';
+    $('submit-note').textContent = owned ? 'Owned-site source audit: no HackerOne submission.' : acronis ? 'Reflection alone is not a vulnerability; no report will be submitted.' : 'A lab run can never be submitted.';
   }
   if (acronis) {
     $('capture-state').textContent = state.intake?.program?.handle === 'acronis' ? 'Scope loaded' : state.status?.hackerone?.apiConfigured ? 'API configured' : 'API unavailable';
@@ -108,6 +133,9 @@ function renderProgramChoice(resetMode = false) {
     const source = state.intake?.source || state.status?.captureSource;
     $('capture-state').textContent = state.intake?.labOnly ? 'Training case loaded' : source === 'manual' ? 'Manual review only' : source === 'browser' ? 'Capture received' : 'Waiting for capture';
     $('capture-state').classList.toggle('is-ready', Boolean(state.intake?.labOnly || source === 'browser'));
+  } else if (owned) {
+    $('capture-state').textContent = state.intake?.program?.handle === 'owned_site' ? 'Audit prepared' : 'Ready to review';
+    $('capture-state').classList.toggle('is-ready', state.intake?.program?.handle === 'owned_site');
   } else {
     $('capture-state').textContent = 'Choose program';
     $('capture-state').classList.remove('is-ready');
@@ -170,15 +198,17 @@ function renderIntake(data) {
   state.intake = data;
   state.intakeUrl = $('program-url').value.trim();
   state.run = null;
-  $('capture-state').textContent = data.labOnly ? 'Training case loaded' : data.source === 'browser' ? 'Capture received' : data.source === 'manual' ? 'Manual review only' : 'Waiting for capture';
-  $('capture-state').classList.toggle('is-ready', Boolean(data.labOnly || data.source === 'browser'));
+  const owned = data.program?.handle === 'owned_site';
+  $('capture-state').textContent = owned ? 'Audit prepared' : data.labOnly ? 'Training case loaded' : data.source === 'browser' ? 'Capture received' : data.source === 'manual' ? 'Manual review only' : 'Waiting for capture';
+  $('capture-state').classList.toggle('is-ready', Boolean(owned || data.labOnly || data.source === 'browser'));
   resetRunDisplay();
   $('program-details').hidden = false;
-  $('program-name').textContent = data.labOnly ? 'Controlled authorization training case' : data.program?.name || data.program?.handle || 'Program';
-  $('program-source').textContent = data.source === 'browser' ? 'BROWSER CAPTURE' : data.source === 'manual' ? 'MANUAL TEXT · REVIEW ONLY' : data.source === 'hackerone_api' ? 'HACKERONE API' : data.source === 'local_sample' ? 'LOCAL TRAINING TARGET' : String(data.source || 'SOURCE UNAVAILABLE').toUpperCase();
-  $('source-program-title').textContent = data.labOnly ? 'Training target' : 'HackerOne';
+  $('program-name').textContent = data.labOnly ? 'Controlled authorization training case' : owned ? data.program?.name || 'AyushOjha.com owned-site audit' : data.program?.name || data.program?.handle || 'Program';
+  $('program-source').textContent = owned ? 'USER-OWNED GITHUB SOURCE' : data.source === 'browser' ? 'BROWSER CAPTURE' : data.source === 'manual' ? 'MANUAL TEXT · REVIEW ONLY' : data.source === 'hackerone_api' ? 'HACKERONE API' : data.source === 'local_sample' ? 'LOCAL TRAINING TARGET' : String(data.source || 'SOURCE UNAVAILABLE').toUpperCase();
+  $('source-program-title').textContent = owned ? 'Owned GitHub source' : data.labOnly ? 'Training target' : 'HackerOne';
+  $('source-program-kind').textContent = owned ? 'source' : 'policy';
   $('source-program').classList.toggle('is-ready', data.source === 'browser' || data.source === 'hackerone_api');
-  $('source-program-detail').textContent = data.labOnly ? 'Controlled local training target. It is not current HackerOne scope.' : data.program?.handle === 'acronis' ? 'Current HackerOne structured scope for one read-only public-search check.' : data.source === 'browser' ? 'Signed-in browser capture received; structured scope is checked separately.' : data.source === 'manual' ? 'Pasted policy text is review-only and cannot authorize a live check.' : 'Structured API scope received without signed-in browser capture.';
+  $('source-program-detail').textContent = owned ? 'Configured private checkout selected. Source scan and public route check begin with the run.' : data.labOnly ? 'Controlled local training target. It is not current HackerOne scope.' : data.program?.handle === 'acronis' ? 'Current HackerOne structured scope for one read-only public-search check.' : data.source === 'browser' ? 'Signed-in browser capture received; structured scope is checked separately.' : data.source === 'manual' ? 'Pasted policy text is review-only and cannot authorize a live check.' : 'Structured API scope received without signed-in browser capture.';
   $('program-asset').textContent = data.policy?.asset || 'No asset specified in the reviewed scope';
   listText($('program-rules'), Array.isArray(data.policy?.rules) ? data.policy.rules : []);
   const scopes = $('scope-list');
@@ -198,7 +228,8 @@ function renderIntake(data) {
 }
 
 function selectedMode() {
-  return document.querySelector('input[name="run-mode"]:checked')?.value || 'lab';
+  const mode = document.querySelector('input[name="run-mode"]:checked')?.value || 'lab';
+  return mode === 'live' && selectedProgram() === 'owned_site' ? 'owned' : mode;
 }
 
 function updateModeNote() {
@@ -210,7 +241,11 @@ function updateModeNote() {
   let note;
   if (!state.intake) note = program === 'acronis' ? 'Review current HackerOne scope to enable one read-only search-marker request.'
     : program === 'vercel' ? 'Capture the signed-in program, or load the controlled training case.'
-      : 'Enter the Acronis or Vercel HackerOne program URL to begin.';
+      : program === 'owned_site' ? 'Review the owned GitHub source before the read-only audit.'
+        : 'Enter a supported HackerOne program or the owned-site URL to begin.';
+  else if (program === 'owned_site' && missing.length) note = `Configure ${missing.join(', ')} in the local .env before the owned-site audit.`;
+  else if (program === 'owned_site' && state.intake.limitations?.some((item) => /blocked|unavailable/i.test(item))) note = 'Owned-site source is not ready for audit. Review the intake limitations.';
+  else if (program === 'owned_site') note = 'Ready to inspect source-level candidates and public route presence. No exploit or HackerOne submission.';
   else if (program === 'acronis' && missing.length) note = `Configure ${missing.join(', ')} in the local .env before the Acronis probe.`;
   else if (program === 'acronis' && !readiness?.hackerone?.apiConfigured) note = 'The Acronis probe needs the HackerOne API credentials for current program scope.';
   else if (program === 'acronis' && (state.intake.check !== 'search_reflection' || state.intake.source !== 'hackerone_api' || !state.intake.scope?.length || state.intake.limitations?.some((item) => /blocked|not confirmed/i.test(item)))) note = 'Acronis scope is not confirmed for this one read-only search-marker request.';
@@ -231,7 +266,7 @@ function updateRunButton() {
   const button = $('run-button');
   const program = state.intake?.program?.handle || selectedProgram();
   if (!state.busy) {
-    button.textContent = selectedMode() === 'lab' ? 'Run paired training check →' : program === 'acronis' ? 'Run one read-only probe →' : 'Run bounded live check →';
+    button.textContent = program === 'owned_site' ? 'Run owned-site audit →' : selectedMode() === 'lab' ? 'Run paired training check →' : program === 'acronis' ? 'Run one read-only probe →' : 'Run bounded live check →';
     button.dataset.label = button.textContent;
   }
   const sponsorsReady = ['guild', 'akash', 'clickhouse', 'senso'].every((key) => connected(state.status?.sponsors?.[key]));
@@ -241,7 +276,9 @@ function updateRunButton() {
   const vercelReady = program === 'vercel' && state.intake && !state.intake.labOnly && state.intake.source === 'browser' && state.status?.captureReady &&
     state.status?.hackerone?.apiConfigured && state.status?.vercel?.configured &&
     !state.intake.limitations?.some((item) => /live mode is blocked/i.test(item));
-  button.disabled = state.busy || !state.intake || !sponsorsReady || (selectedMode() === 'live' ? !(acronisReady || vercelReady) : program !== 'vercel');
+  const ownedReady = program === 'owned_site' && state.intake?.source === 'user_owned_github' &&
+    !state.intake.limitations?.some((item) => /blocked|unavailable/i.test(item));
+  button.disabled = state.busy || !state.intake || !sponsorsReady || (selectedMode() === 'owned' ? !ownedReady : selectedMode() === 'live' ? !(acronisReady || vercelReady) : program !== 'vercel');
 }
 
 function createElement(tag, className, text) {
@@ -339,25 +376,55 @@ function renderValidation(validation) {
   }
 }
 
+function renderOwnedAudit(data) {
+  const section = $('owned-results');
+  section.hidden = data.mode !== 'owned';
+  if (section.hidden) return;
+  const findings = Array.isArray(data.findings) ? data.findings : [];
+  $('owned-confidence').textContent = data.confidence === 'source-only' ? 'SOURCE ONLY' : 'UNVERIFIED SOURCE';
+  $('owned-finding-count').textContent = `${findings.length} candidate${findings.length === 1 ? '' : 's'}`;
+  const list = $('owned-finding-list');
+  list.replaceChildren();
+  for (const finding of findings) {
+    const row = createElement('li', 'owned-finding');
+    const top = createElement('div', 'owned-finding-top');
+    const ruleId = String(finding.ruleId || 'Source rule');
+    top.append(createElement('strong', '', ruleId.slice(ruleId.lastIndexOf('.') + 1)));
+    top.append(createElement('code', '', `${finding.path || 'Source path unavailable'}${Number.isInteger(finding.line) && finding.line > 0 ? `:${finding.line}` : ''}`));
+    row.append(top, createElement('p', '', finding.message || 'Review this source candidate.'));
+    list.append(row);
+  }
+  if (!findings.length) list.append(createElement('li', 'owned-no-findings', 'No source candidates were returned in this run.'));
+  const live = data.liveObservation || {};
+  $('owned-live-status').textContent = `Anonymous GET ${live.path || '/api/access'}: ${Number(live.status) > 0 ? `HTTP ${live.status}` : 'no response recorded'}`;
+  $('owned-live-collections').textContent = `Names in access response: ${Array.isArray(live.collectionNames) && live.collectionNames.length ? live.collectionNames.join(', ') : 'none recorded'}`;
+  $('owned-source-commit').textContent = data.sourceCommit ? `Source revision: ${String(data.sourceCommit).slice(0, 12)}` : 'Source revision not recorded.';
+}
+
 function renderEvidence(data) {
   const acronis = data.programHandle === 'acronis' || state.intake?.program?.handle === 'acronis';
+  const owned = data.mode === 'owned';
   const acronisResponded = Number(data.evidence?.[0]?.status) > 0;
   const acronisCapped = acronis && data.evidence?.[0]?.responseCapped === true;
   $('evidence-empty').hidden = true;
   $('evidence-results').hidden = false;
   $('source-evidence').classList.add('is-ready');
-  $('source-evidence-detail').textContent = data.mode === 'lab' ? 'Synthetic observations from the local fixture; no bounty claim.' : acronis ? acronisCapped ? 'One live public-search response observed; only its first 256 KiB were read.' : acronisResponded ? 'One live public-search response observed. Reflection alone is not a vulnerability.' : 'One public-search request attempted; no target response was recorded.' : 'Bounded observations from researcher-owned accounts; inspect raw evidence.';
+  $('source-evidence-detail').textContent = owned ? 'GitHub source candidates and public route status; no authenticated exploit check.' : data.mode === 'lab' ? 'Synthetic observations from the local fixture; no bounty claim.' : acronis ? acronisCapped ? 'One live public-search response observed; only its first 256 KiB were read.' : acronisResponded ? 'One live public-search response observed. Reflection alone is not a vulnerability.' : 'One public-search request attempted; no target response was recorded.' : 'Bounded observations from researcher-owned accounts; inspect raw evidence.';
   const verdicts = { candidate: 'Candidate finding — human validation required', expected: 'Expected boundary held', inconclusive: 'Inconclusive evidence' };
-  $('result-verdict').textContent = acronis
+  $('result-verdict').textContent = owned
+    ? data.verdict === 'source_candidate' ? 'Source candidates found — live impact unverified' : 'No source candidates identified'
+    : acronis
     ? acronisResponded ? 'Search response observed — no finding established' : 'No target response — no finding established'
     : data.mode === 'lab' && data.verdict === 'candidate'
     ? 'Simulated candidate — local lab only'
     : verdicts[data.verdict] || `Result: ${data.verdict || 'unknown'}`;
-  $('result-mode').textContent = acronis ? 'LIVE · ONE READ-ONLY REQUEST' : data.mode === 'live' ? 'LIVE CHECK' : 'LOCAL LAB · SYNTHETIC';
+  $('result-mode').textContent = owned ? 'OWNED SITE · SOURCE ONLY' : acronis ? 'LIVE · ONE READ-ONLY REQUEST' : data.mode === 'live' ? 'LIVE CHECK' : 'LOCAL LAB · SYNTHETIC';
   const latency = data.queryLatencyMs;
   $('query-latency').hidden = !Number.isFinite(latency) || latency < 0;
   if (!$('query-latency').hidden) $('query-latency').textContent = `ClickHouse query ${Math.round(latency * 10) / 10} ms`;
-  $('result-explanation').textContent = acronis
+  $('result-explanation').textContent = owned
+    ? 'ProofRun inspected owner-linked source and checked public route presence. No hosted account session or application record was accessed; these candidates require controlled live verification.'
+    : acronis
     ? acronisCapped
       ? 'ProofRun recorded one response, but stopped reading at 256 KiB. The unread remainder cannot be assessed; no vulnerability or bounty report is claimed.'
       : acronisResponded
@@ -371,6 +438,7 @@ function renderEvidence(data) {
         ? 'The other account did not access the owner’s private project in this run.'
         : 'This run did not provide enough evidence to support a report.';
   renderValidation(data.validation);
+  renderOwnedAudit(data);
   if (data.validation) {
     $('source-evidence-detail').textContent = 'Two controlled local training paths were compared; no HackerOne target was tested.';
     $('result-verdict').textContent = data.validation.passed === true ? 'Authorization failure reproduced in training' : 'Training control incomplete';
@@ -381,7 +449,7 @@ function renderEvidence(data) {
   }
   const list = $('evidence-list');
   list.replaceChildren();
-  list.hidden = Boolean(data.validation && !data.evidence?.length);
+  list.hidden = owned || Boolean(data.validation && !data.evidence?.length);
   for (const item of Array.isArray(data.evidence) ? data.evidence : []) {
     const row = createElement('li', item.actor !== 'owner' && item.ownerMarkerPresent ? 'is-alert' : '');
     const dot = createElement('span', 'timeline-dot');
@@ -395,7 +463,7 @@ function renderEvidence(data) {
     list.append(row);
   }
   if (!list.children.length) list.append(createElement('li', '', 'No evidence items were recorded.'));
-  const review = data.reviewNote;
+  const review = typeof data.reviewNote === 'string' ? { summary: data.reviewNote } : data.reviewNote;
   const questions = Array.isArray(review?.validationQuestions) ? review.validationQuestions.filter((question) => typeof question === 'string' && question.trim()) : [];
   $('review-note').hidden = !review?.summary && questions.length === 0;
   $('review-summary').textContent = typeof review?.summary === 'string' ? review.summary : '';
@@ -408,7 +476,7 @@ function renderEvidence(data) {
 
 function renderTrace(data) {
   const trace = Array.isArray(data.sponsorTrace) ? data.sponsorTrace : [];
-  $('trace-mode').textContent = data.validation ? 'LAB / PAIRED CONTROL' : data.mode === 'lab' ? 'LAB / SIMULATED' : data.programHandle === 'acronis' ? 'LIVE / ACRONIS' : 'LIVE RUN';
+  $('trace-mode').textContent = data.mode === 'owned' ? 'OWNED / SOURCE AUDIT' : data.validation ? 'LAB / PAIRED CONTROL' : data.mode === 'lab' ? 'LAB / SIMULATED' : data.programHandle === 'acronis' ? 'LIVE / ACRONIS' : 'LIVE RUN';
   $('trace-empty').hidden = trace.length > 0;
   $('sponsor-trace').hidden = trace.length === 0;
   const list = $('sponsor-trace');
@@ -428,7 +496,8 @@ function renderTrace(data) {
 function renderReport(data) {
   const draft = data.reportDraft;
   const acronis = data.programHandle === 'acronis' || state.intake?.program?.handle === 'acronis';
-  const hasDraft = !data.validation && draft && typeof draft === 'object';
+  const owned = data.mode === 'owned';
+  const hasDraft = !owned && !data.validation && draft && typeof draft === 'object';
   $('report-fields').hidden = !hasDraft;
   $('draft-title').value = hasDraft ? draft.title || '' : '';
   $('draft-information').value = hasDraft ? draft.vulnerability_information || '' : '';
@@ -438,7 +507,9 @@ function renderReport(data) {
   $('validation-note').value = '';
   $('validation-label').hidden = !hasDraft || data.mode !== 'live' || data.verdict !== 'candidate';
   $('validation-note-block').hidden = $('validation-label').hidden;
-  $('report-guidance').textContent = acronis
+  $('report-guidance').textContent = owned
+    ? 'This owned-site audit returns source-level candidates, not a verified exploit or a HackerOne report. Validate any candidate in a controlled account before making a security claim.'
+    : acronis
     ? 'No report was generated. One read-only search-marker response cannot establish a vulnerability from ordinary reflection.'
     : data.validation
     ? 'This is a controlled training result, not a HackerOne finding. No bounty report is available from this run.'
@@ -447,7 +518,8 @@ function renderReport(data) {
     : data.verdict === 'candidate'
       ? 'Review every claim against raw evidence. Verify real impact and attach an unedited screenshot or video directly in HackerOne before submitting.'
       : 'This run does not establish a reportable finding.';
-  $('submit-note').textContent = acronis ? 'Reflection alone is not a vulnerability; there is nothing to submit.'
+  $('submit-note').textContent = owned ? 'No HackerOne submission from this source audit.'
+    : acronis ? 'Reflection alone is not a vulnerability; there is nothing to submit.'
     : data.validation ? 'Controlled training results cannot be submitted to HackerOne.'
     : data.mode === 'lab' ? 'A lab run can never be submitted.'
     : data.verdict !== 'candidate' ? 'Only a validated live candidate can be submitted.'
@@ -471,6 +543,7 @@ function resetRunDisplay() {
   $('evidence-empty').hidden = false;
   $('evidence-results').hidden = true;
   $('validation-results').hidden = true;
+  $('owned-results').hidden = true;
   $('evidence-list').hidden = false;
   $('review-note').hidden = true;
   $('query-latency').hidden = true;
@@ -499,6 +572,7 @@ function clearCase() {
   $('capture-state').classList.remove('is-ready');
   $('source-program').classList.remove('is-ready');
   $('source-program-title').textContent = 'HackerOne';
+  $('source-program-kind').textContent = 'policy';
   $('source-program-detail').textContent = 'Waiting for current program scope.';
   resetRunDisplay();
   renderProgramChoice();
@@ -513,7 +587,9 @@ async function capture(event) {
   try {
     const data = await request('/api/intake', { method: 'POST', body: JSON.stringify({ url: $('program-url').value.trim() }) });
     renderIntake(data);
-    setMessage(data.program?.handle === 'acronis'
+    setMessage(data.program?.handle === 'owned_site'
+      ? 'Owned-site audit prepared. Review the boundary, then run the source scan and public route check.'
+      : data.program?.handle === 'acronis'
       ? 'Current Acronis scope loaded from HackerOne API. Review it before the one read-only search-marker request.'
       : data.source === 'browser'
       ? `Captured ${data.program?.name || 'program'} policy from the signed-in browser. Review the scope before running a check.`
@@ -583,7 +659,11 @@ async function runCheck() {
     renderEvidence(data);
     renderTrace(data);
     renderReport(data);
-    setMessage(data.programHandle === 'acronis'
+    setMessage(data.mode === 'owned'
+      ? data.verdict === 'source_candidate'
+        ? 'Source-level candidates recorded. Hosted exploit remains unverified; no HackerOne report was created.'
+        : 'Owned-site source audit completed. No source candidates were identified in this run.'
+      : data.programHandle === 'acronis'
       ? Number(data.evidence?.[0]?.status) > 0
         ? 'Acronis read-only probe completed. One search response was recorded; no vulnerability or report is claimed.'
         : 'Acronis read-only probe attempted. No target response was recorded; no vulnerability or report is claimed.'

@@ -3,9 +3,10 @@ import { readFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
-import { sponsorStatus, contextFromSenso, planWithAkash, planWatchWithAkash, planAcronisWithAkash, explainWithAkash, explainWatchWithAkash, explainAcronisWithAkash, prepareClickHouse, prepareAcronisClickHouse, recordWithClickHouse, recordAcronisWithClickHouse, compareWatchWithClickHouse, storeWatchWithClickHouse, runOnGuild, notifyGuild } from './sponsors.mjs';
+import { sponsorStatus, contextFromSenso, planWithAkash, planWatchWithAkash, planAcronisWithAkash, planOwnedSiteWithAkash, explainWithAkash, explainWatchWithAkash, explainAcronisWithAkash, explainOwnedSiteWithAkash, prepareClickHouse, prepareAcronisClickHouse, prepareOwnedSiteClickHouse, recordWithClickHouse, recordAcronisWithClickHouse, recordOwnedSiteWithClickHouse, compareWatchWithClickHouse, storeWatchWithClickHouse, runOnGuild, notifyGuild } from './sponsors.mjs';
 import { parseProgramUrl, captureIsUsable, fetchProgramScope, fetchProgramScopeSnapshot, fetchAcronisScope, probeProject, probeTrainingCase, probeAcronisSearch, draftReport, validateSubmission, submitToHackerOne } from './core.mjs';
 import { createTrainingCase, disposeTrainingCase, handleTrainingRequest } from './training-target.mjs';
+import { auditOwnedSite } from './owned-site.mjs';
 
 const root = new URL('../', import.meta.url);
 const envPath = fileURLToPath(new URL('.env', root));
@@ -60,12 +61,38 @@ function status() {
       idVerified: process.env.HACKERONE_ID_VERIFIED === 'true',
     },
     vercel: { configured: Boolean(process.env.VERCEL_PROJECT_ID && process.env.VERCEL_OWNER_TOKEN && process.env.VERCEL_OTHER_TOKEN) },
+    ownedSite: { configured: Boolean(process.env.OWNED_SITE_URL && process.env.OWNED_SITE_REPO_DIR) },
     captureReady: browserCaptureReady(),
     captureSource: captureIsUsable(capture) ? capture.source : null,
   };
 }
 
+function isOwnedSiteUrl(value) {
+  try {
+    const input = new URL(value);
+    const configured = new URL(process.env.OWNED_SITE_URL);
+    return input.origin === configured.origin && input.pathname === '/' && !input.search && !input.hash &&
+      configured.href === 'https://ayushojha.com/';
+  } catch { return false; }
+}
+
 async function handleIntake(body) {
+  if (isOwnedSiteUrl(body.url)) {
+    if (!process.env.OWNED_SITE_REPO_DIR) throw new Error('Configure the private owned-site checkout before auditing this URL.');
+    intake = { programHandle: 'owned_site', programUrl: 'https://ayushojha.com', createdAt: Date.now() };
+    return {
+      program: { handle: 'owned_site', name: 'Ayush Ojha owned site' },
+      check: 'source_acl',
+      policy: { asset: 'https://ayushojha.com and its configured private source checkout', rules: [
+        'Scan the local source checkout with Semgrep for broad Payload access rules.',
+        'Make one anonymous read-only GET to the exact site /api/access endpoint.',
+        'Do not read private records, authenticate, change site data, or claim a hosted exploit from source alone.',
+      ] },
+      scope: ['User-declared owned hostname: ayushojha.com', 'Configured private GitHub checkout'],
+      source: 'user_owned_github', labOnly: false,
+      limitations: ['Source findings require policy review and live subscriber validation.', 'This is not a HackerOne program or bounty report.'],
+    };
+  }
   const programUrl = parseProgramUrl(body.url);
   if (programUrl === 'https://hackerone.com/acronis') {
     if (body.sampleLab === true) throw new Error('Acronis has no local sample. Use the current HackerOne API scope for a bounded live check.');
@@ -144,6 +171,38 @@ async function handleIntake(body) {
   };
 }
 
+async function executeOwnedSiteRun(body) {
+  if (body.mode !== 'owned') throw new Error('Choose the owned-site source audit.');
+  if (!sponsorStatus().ready) throw new Error('Guild, AkashML, ClickHouse, and Senso must all be configured before a run.');
+  const id = randomUUID();
+  const sponsorTrace = [];
+  const policyContext = await contextFromSenso('owned_source_audit');
+  sponsorTrace.push({ tool: 'Senso', status: 'retrieved', detail: `Policy source ${policyContext.contentId}, version ${policyContext.versionId}` });
+  const guild = await runOnGuild('start', { id, programHandle: 'owned_site', mode: 'owned', check: 'source_acl' });
+  sponsorTrace.push({ tool: 'Guild', status: guild.allow ? 'approved' : 'stopped', detail: `Owned-site gate session ${guild.sessionId}` });
+  if (!guild.allow) throw new Error('Guild declined the owned-site source audit.');
+  const plan = await planOwnedSiteWithAkash({ policyContext, targetUrl: intake.programUrl });
+  sponsorTrace.push({ tool: 'AkashML', status: plan.check === 'source_acl' ? 'selected' : 'stopped', detail: plan.rationale });
+  if (plan.check !== 'source_acl') throw new Error('AkashML did not select the approved source audit.');
+  await prepareOwnedSiteClickHouse();
+  const audit = await auditOwnedSite(intake.programUrl);
+  const findings = audit.source.findings;
+  const analysis = await recordOwnedSiteWithClickHouse({ id, findings });
+  sponsorTrace.push({ tool: 'Semgrep', status: 'scanned', detail: `${findings.length} bounded access-rule candidates in the configured checkout.` });
+  sponsorTrace.push({ tool: 'ClickHouse', status: 'queried', detail: `${analysis.recorded} normalized findings; query ${analysis.queryLatencyMs} ms.` });
+  const verdict = findings.length ? 'source_candidate' : 'none';
+  const reviewNote = await explainOwnedSiteWithAkash({ verdict, findings, liveCheck: audit.live });
+  sponsorTrace.push({ tool: 'AkashML', status: 'explained', detail: 'Reviewed normalized source findings; hosted exploit remains unverified.' });
+  await notifyGuild({ id, programHandle: 'owned_site', mode: 'owned', verdict });
+  sponsorTrace.push({ tool: 'Guild', status: 'acknowledged', detail: 'Read-only owned-site audit recorded.' });
+  const run = { id, programHandle: 'owned_site', mode: 'owned', verdict, findings,
+    liveObservation: audit.live, sourceCommit: audit.source.gitHead, confidence: 'source-only',
+    sponsorTrace, reviewNote, queryLatencyMs: analysis.queryLatencyMs, reportDraft: null,
+    submissionEligible: false, submitted: false };
+  runs.set(id, run);
+  return run;
+}
+
 async function executeAcronisRun(body) {
   if (body.mode !== 'live') throw new Error('The Acronis public-search check runs only as a bounded live observation.');
   if (!sponsorStatus().ready) throw new Error('Guild, AkashML, ClickHouse, and Senso must all be configured before a run.');
@@ -184,6 +243,7 @@ async function executeAcronisRun(body) {
 async function executeRun(body) {
   if (!intake) throw new Error('Capture and review the program first.');
   if (Date.now() - intake.createdAt > 30 * 60 * 1000) throw new Error('Program intake expired. Capture the current scope again.');
+  if (intake.programHandle === 'owned_site') return executeOwnedSiteRun(body);
   if (intake.programHandle === 'acronis') return executeAcronisRun(body);
   const mode = body.mode;
   if (!['lab', 'live'].includes(mode)) throw new Error('Choose lab or live mode.');

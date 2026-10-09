@@ -26,8 +26,8 @@
         <section class="intro" aria-labelledby="page-title">
           <p class="micro-label intro-kicker">PROOFRUN / SCOPED BOUNTY VERIFICATION</p>
           <h1 id="page-title">Start with a program.<br>Finish with evidence<span>.</span></h1>
-          <p class="intro-copy">Give ProofRun a supported HackerOne program URL. It confirms the current scope, runs only that program’s bounded check, and separates real observations from reportable findings.</p>
-          <div class="hero-boundary"><span class="hero-boundary-mark" aria-hidden="true">↗</span><div><strong>SUPPORTED CHECKS TODAY</strong><span><b>Acronis</b> · one read-only search-marker request</span><span><b>Vercel</b> · project read across two researcher-owned accounts</span><span><b>Controlled training</b> · exposed and protected authorization paths</span></div><a href="#intake-title">Start a case <span aria-hidden="true">→</span></a></div>
+          <p class="intro-copy">Give ProofRun a supported HackerOne program or the owned-site audit URL. It separates source candidates, bounded observations, and findings that still need live verification.</p>
+          <div class="hero-boundary"><span class="hero-boundary-mark" aria-hidden="true">↗</span><div><strong>SUPPORTED CHECKS TODAY</strong><span><b>Acronis</b> · one read-only search-marker request</span><span><b>Vercel</b> · project read across two researcher-owned accounts</span><span><b>AyushOjha.com</b> · owned GitHub source and live route presence</span><span><b>Controlled training</b> · exposed and protected authorization paths</span></div><a href="#intake-title">Start a case <span aria-hidden="true">→</span></a></div>
           <button id="lab-shortcut" class="lab-shortcut" type="button">See the paired training check <span aria-hidden="true">→</span></button>
         </section>
 
@@ -39,10 +39,10 @@
           <div class="step-body">
             <form id="intake-form" class="intake-card">
               <div class="url-column">
-                <label for="program-url">HackerOne program URL</label>
+                <label for="program-url">Program or owned-site URL</label>
                 <input id="program-url" name="url" type="url" value="https://hackerone.com/acronis" required spellcheck="false" autocomplete="url" placeholder="https://hackerone.com/program">
-                <div class="program-presets" aria-label="Supported programs"><button id="program-acronis" class="program-preset is-selected" type="button" aria-pressed="true" data-url="https://hackerone.com/acronis">Acronis <small>PUBLIC SEARCH</small></button><button id="program-vercel" class="program-preset" type="button" aria-pressed="false" data-url="https://hackerone.com/vercel">Vercel <small>OWNED ACCOUNTS</small></button></div>
-                <p class="field-help">Only these two checks are implemented. <a id="program-source-link" href="https://hackerone.com/acronis" target="_blank" rel="noopener noreferrer">Open the current program policy</a>.</p>
+                <div class="program-presets" aria-label="Supported programs and owned site"><button id="program-acronis" class="program-preset is-selected" type="button" aria-pressed="true" data-url="https://hackerone.com/acronis">Acronis <small>PUBLIC SEARCH</small></button><button id="program-vercel" class="program-preset" type="button" aria-pressed="false" data-url="https://hackerone.com/vercel">Vercel <small>OWNED ACCOUNTS</small></button><button id="program-owned" class="program-preset" type="button" aria-pressed="false" data-url="https://ayushojha.com">AyushOjha.com <small>OWNED SOURCE</small></button></div>
+                <p class="field-help">These three checks are implemented. <a id="program-source-link" href="https://hackerone.com/acronis" target="_blank" rel="noopener noreferrer">Open the current program policy</a>.</p>
               </div>
               <div class="capture-column">
                 <div class="capture-heading"><span id="capture-heading-label">HackerOne API</span><span id="capture-state" class="capture-state">Waiting for scope</span></div>
@@ -74,7 +74,7 @@
           </div></div>
           <div class="step-body">
             <fieldset class="mode-selector"><legend class="visually-hidden">Run mode</legend>
-              <label class="mode-card" for="mode-live"><input id="mode-live" type="radio" name="run-mode" value="live" checked><span class="mode-text"><strong>Bounded live check</strong><small id="live-mode-description">One read-only public-search marker request. Current Acronis scope required.</small></span><span class="mode-hint">SCOPED</span></label>
+              <label class="mode-card" for="mode-live"><input id="mode-live" type="radio" name="run-mode" value="live" checked><span class="mode-text"><strong id="live-mode-title">Bounded live check</strong><small id="live-mode-description">One read-only public-search marker request. Current Acronis scope required.</small></span><span id="live-mode-hint" class="mode-hint">SCOPED</span></label>
               <label class="mode-card" for="mode-lab"><input id="mode-lab" type="radio" name="run-mode" value="lab" disabled><span class="mode-text"><strong>Controlled training check</strong><small>Compare exposed and protected local authorization paths. No HackerOne target traffic.</small></span><span class="mode-hint">TRAINING</span></label>
             </fieldset>
             <div class="run-footer"><button id="run-button" class="button button-primary" type="button" disabled>Run bounded check <span aria-hidden="true">→</span></button><p id="mode-note" class="mode-note" aria-live="polite">Capture a program to begin.</p></div>
@@ -97,6 +97,16 @@
                 </div>
                 <p class="validation-disclaimer">Controlled training target, not a HackerOne finding. The paired result demonstrates this check's detection behavior; it cannot be submitted as a bounty report.</p>
               </section>
+              <section id="owned-results" class="owned-results" aria-label="Owned-site source audit" hidden>
+                <div class="owned-heading"><div><p class="micro-label">OWNED SITE / SOURCE AUDIT</p><h3>Code signals. Live context.</h3></div><span id="owned-confidence" class="owned-confidence">SOURCE ONLY</span></div>
+                <p class="owned-intro">Candidates come from the linked GitHub source. The hosted check confirms only route presence or response status; it does not reproduce an exploit.</p>
+                <div class="owned-grid">
+                  <div class="owned-findings"><div class="owned-section-head"><h4>Source candidates</h4><span id="owned-finding-count"></span></div><ol id="owned-finding-list"></ol></div>
+                  <div class="owned-live"><div class="owned-section-head"><h4>Hosted observation</h4><span>READ ONLY</span></div><p id="owned-live-status"></p><p id="owned-live-collections"></p><p class="owned-live-limit">No hosted account session or application record was accessed.</p></div>
+                </div>
+                <p id="owned-source-commit" class="owned-source-commit"></p>
+                <p class="owned-disclaimer">Source-level candidates only. Hosted exploit not verified. This is not a HackerOne finding or submission.</p>
+              </section>
               <ol id="evidence-list" class="evidence-list"></ol><div id="review-note" class="review-note" hidden><p class="micro-label">AKASHML REVIEW · UNVERIFIED</p><p id="review-summary"></p><ol id="review-questions" aria-label="Questions to validate"></ol></div></div>
           </div>
         </section>
@@ -104,7 +114,7 @@
         <section class="step-section report-panel" aria-labelledby="report-title">
           <div class="step-heading"><span class="step-number">4</span><div>
             <h2 id="report-title">Review the report draft</h2>
-            <p>A draft appears only for a candidate that needs human verification. Ordinary search-marker reflection produces no report.</p>
+            <p id="report-description">A draft appears only for a candidate that needs human verification. Ordinary search-marker reflection produces no report.</p>
           </div></div>
           <div class="step-body report-body"><p id="report-guidance" class="report-guidance">Run a check to generate a draft. A human must verify a real finding before submission.</p>
             <div id="report-fields" class="report-fields" hidden><label for="draft-title">Title</label><input id="draft-title" type="text" maxlength="200"><label for="draft-information">Proof of concept</label><textarea id="draft-information" rows="7"></textarea><label for="draft-impact">Impact</label><textarea id="draft-impact" rows="4"></textarea><label for="draft-severity">Severity</label><select id="draft-severity" required><option value="">Choose after reviewing impact</option><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option><option value="critical">Critical</option></select></div>
@@ -130,7 +140,7 @@
 
       <aside class="side-column" aria-label="Connections and provenance">
         <section class="side-section" aria-labelledby="integrations-title"><h2 id="integrations-title">Sponsor connections</h2><p class="side-intro">All four services are required for a run. Status shows configuration, not a live service check.</p><ul id="sponsor-statuses" class="sponsor-statuses"><li><span>Guild</span><span class="status-text">Checking</span></li><li><span>AkashML</span><span class="status-text">Checking</span></li><li><span>ClickHouse</span><span class="status-text">Checking</span></li><li><span>Senso</span><span class="status-text">Checking</span></li></ul><div class="integration-meta"><span>HackerOne API <b id="hackerone-status">Checking</b></span><span>Vercel accounts (Vercel only) <b id="vercel-status">Checking</b></span><span>ID verification (submission) <b id="identity-status">Checking</b></span></div></section>
-        <section class="side-section provenance-section" aria-labelledby="provenance-title"><h2 id="provenance-title">Source provenance</h2><p class="side-intro">What each stage can actually establish.</p><ol class="provenance-list"><li class="is-current"><strong>ProofRun <code>local</code></strong><span>Your browser and this device run the workbench.</span></li><li id="source-program"><strong><span id="source-program-title">HackerOne</span> <code>policy</code></strong><span id="source-program-detail">Waiting for current program scope.</span></li><li id="source-policy"><strong>Senso <code>context</code></strong><span id="source-policy-detail">A pinned ProofRun policy is retrieved when a run begins.</span></li><li id="source-evidence"><strong>Check <code>evidence</code></strong><span id="source-evidence-detail">No observations recorded yet.</span></li></ol><div class="trace-heading"><h3>Run trace</h3><span id="trace-mode" class="trace-mode"></span></div><div id="trace-empty" class="trace-empty">No sponsor calls recorded.</div><ol id="sponsor-trace" class="sponsor-trace" hidden></ol></section>
+        <section class="side-section provenance-section" aria-labelledby="provenance-title"><h2 id="provenance-title">Source provenance</h2><p class="side-intro">What each stage can actually establish.</p><ol class="provenance-list"><li class="is-current"><strong>ProofRun <code>local</code></strong><span>Your browser and this device run the workbench.</span></li><li id="source-program"><strong><span id="source-program-title">HackerOne</span> <code id="source-program-kind">policy</code></strong><span id="source-program-detail">Waiting for current program scope.</span></li><li id="source-policy"><strong>Senso <code>context</code></strong><span id="source-policy-detail">A pinned ProofRun policy is retrieved when a run begins.</span></li><li id="source-evidence"><strong>Check <code>evidence</code></strong><span id="source-evidence-detail">No observations recorded yet.</span></li></ol><div class="trace-heading"><h3>Run trace</h3><span id="trace-mode" class="trace-mode"></span></div><div id="trace-empty" class="trace-empty">No sponsor calls recorded.</div><ol id="sponsor-trace" class="sponsor-trace" hidden></ol></section>
         <p class="side-quiet">Evidence stays distinct from inference.<br>The final report stays in your hands.</p>
       </aside>
     </div>

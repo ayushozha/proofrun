@@ -10,6 +10,12 @@ This is ProofRun's operating policy for its hackathon prototype. It does not rep
 - Local lab results are synthetic training data and are never reportable as Vercel vulnerabilities.
 - A live candidate is not a confirmed vulnerability. A researcher must independently reproduce the behavior, establish private-field impact, review every claim, attach the required unedited screenshot or video, and submit the report manually in HackerOne.
 
+## Owned-site source audit
+
+- The `source_acl` source audit is allowed only for the researcher's own site at the exact URL `https://ayushojha.com`. It reads the local site source with Semgrep to identify Payload collection access callbacks that grant access to any authenticated user. Only normalized rule ID, collection path, and line number may leave the local worker for ClickHouse or AkashML; raw source, credentials, and user data stay local.
+- The only network observation allowed by this audit is one anonymous, read-only `GET https://ayushojha.com/api/access`. Do not send an Authorization header, cookies, a body, or any other target request. No login, mutation, fuzzing, scanning, or report submission is permitted.
+- A Semgrep match is a source-policy candidate, not a confirmed deployed vulnerability. A public HTTP response alone cannot establish unauthorized access. The result must remain `source_candidate`, `none`, or `inconclusive` until a human checks intended roles, deployed code, and actual access impact. This owned-site check is separate from HackerOne program authorization and does not justify a bounty report.
+
 ## Acronis public search marker
 
 - An Acronis live run requires the HackerOne researcher API to confirm the program is open, `*.acronis.com` is eligible for submission, and the current program policy permits automated web testing with the researcher's `@wearehackerone.com` alias in User-Agent at no more than five requests per second per host.

@@ -1,0 +1,29 @@
+rules:
+  - id: payload-access-authenticated-user-only
+    languages: [typescript]
+    severity: WARNING
+    message: >-
+      Payload collection access.$ACTION allows any authenticated user. Check the
+      collection's intended role and ownership policy before treating this as safe.
+    metadata:
+      category: security
+      confidence: HIGH
+      technology: [payload]
+    patterns:
+      - pattern-either:
+          - pattern: |
+              access: {
+                ...,
+                $ACTION: ({ req: { user } }) => !!user,
+                ...
+              }
+          - pattern: |
+              access: {
+                ...,
+                $ACTION: ({ req: { user } }) => { ...; return !!user; },
+                ...
+              }
+      - metavariable-regex:
+          metavariable: $ACTION
+          regex: '^(create|update|read)$'
+      - focus-metavariable: $ACTION
