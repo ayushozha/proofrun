@@ -3,7 +3,8 @@ import http from 'node:http';
 import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { once } from 'node:events';
-import { probeProject } from '../server/core.mjs';
+import { parseProgramUrl, fetchAcronisScope, probeAcronisSearch, probeProject } from '../server/core.mjs';
+import { explainAcronisWithAkash } from '../server/sponsors.mjs';
 
 const stubs = { guildStarts: 0, guildCompletes: 0, akash: 0, clickhouse: 0, senso: 0 };
 let returnedPolicyId = 'stub-policy';
@@ -88,8 +89,8 @@ const app = spawn(process.execPath, ['server/index.mjs'], {
 });
 
 const base = `http://127.0.0.1:${appPort}`;
-async function post(path, data) {
-  const response = await fetch(`${base}${path}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
+async function post(path, data, origin) {
+  const response = await fetch(`${base}${path}`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...(origin ? { Origin: origin } : {}) }, body: JSON.stringify(data) });
   return { status: response.status, body: await response.json() };
 }
 
@@ -100,7 +101,7 @@ try {
     await new Promise((resolve) => setTimeout(resolve, 50));
   }
   assert(ready, 'app server started');
-  const previous = ['VERCEL_PROJECT_ID', 'VERCEL_OWNER_TOKEN', 'VERCEL_OTHER_TOKEN', 'HACKERONE_API_USERNAME']
+  const previous = ['VERCEL_PROJECT_ID', 'VERCEL_OWNER_TOKEN', 'VERCEL_OTHER_TOKEN', 'HACKERONE_API_USERNAME', 'HACKERONE_API_TOKEN', 'AKASHML_API_KEY', 'AKASHML_MODEL']
     .map((name) => [name, process.env[name]]);
   const fetchBeforeTokenCheck = globalThis.fetch;
   try {
@@ -151,6 +152,45 @@ try {
     const checks = await probeProject('live', appPort);
     assert.deepEqual(checks.map(({ status }) => status), [200, 404, 404]);
     assert.equal(projectReads, 3);
+
+    assert.equal(parseProgramUrl('https://hackerone.com/acronis/'), 'https://hackerone.com/acronis');
+    process.env.HACKERONE_API_TOKEN = 'stub';
+    globalThis.fetch = (url) => Promise.resolve(Response.json(String(url).includes('/structured_scopes')
+      ? { data: [{ id: 'scope-acronis', attributes: { asset_identifier: '*.acronis.com', eligible_for_submission: true, updated_at: '2026-10-09' } }] }
+      : { attributes: { handle: 'acronis', submission_state: 'open', policy: 'If you do any automated scanning against Web resources and API-s place your @wearehackerone email into User-Agent header. Automated scanning tools must be limited to 5 requests per second.' } }));
+    const acronisScope = await fetchAcronisScope();
+    assert.equal(acronisScope.identifier, '*.acronis.com');
+    assert(Object.values(acronisScope.policyChecks).every(Boolean));
+    globalThis.fetch = (url, options) => {
+      const target = new URL(url);
+      assert.equal(target.origin, 'https://www.acronis.com');
+      assert.equal(target.pathname, '/en/search/');
+      assert.equal([...target.searchParams.keys()].join(','), 'query');
+      assert.match(target.searchParams.get('query'), /^proofrun[a-f0-9]{16}$/);
+      assert.equal(options.method, 'GET');
+      assert.equal(options.redirect, 'error');
+      assert.match(options.headers['User-Agent'], /ayushojha@wearehackerone\.com/);
+      return Promise.resolve(new Response(`<p>${target.searchParams.get('query')}</p>`, { status: 200, headers: { 'Content-Type': 'text/html' } }));
+    };
+    const acronisEvidence = await probeAcronisSearch();
+    assert.equal(acronisEvidence.status, 200);
+    assert.equal(acronisEvidence.markerReflected, true);
+    assert.equal(acronisEvidence.responseCapped, false);
+    assert.match(acronisEvidence.detail, /not a vulnerability/i);
+    globalThis.fetch = (url) => Promise.resolve(new Response(`${'x'.repeat(260 * 1024)}${new URL(url).searchParams.get('query')}`, { status: 200 }));
+    const cappedEvidence = await probeAcronisSearch();
+    assert.equal(cappedEvidence.markerReflected, false);
+    assert.equal(cappedEvidence.responseCapped, true);
+    assert.match(cappedEvidence.detail, /256 KiB observation cap/i);
+    process.env.AKASHML_API_KEY = 'stub';
+    process.env.AKASHML_MODEL = 'configured-by-test';
+    globalThis.fetch = () => Promise.resolve(Response.json({ choices: [{ message: { content: JSON.stringify({
+      summary: 'HTTP 200, and the marker was not reflected in the response body.',
+      validationQuestions: ['Was the marker visible within the bounded response bytes?'],
+    }) } }] }));
+    const cappedReview = await explainAcronisWithAkash({ evidence: cappedEvidence, verdict: 'inconclusive' });
+    assert.match(cappedReview.summary, /256 KiB read cap/);
+    assert.doesNotMatch(cappedReview.summary, /not reflected in the response body/);
   } finally {
     globalThis.fetch = fetchBeforeTokenCheck;
     for (const [name, value] of previous) {
@@ -182,11 +222,21 @@ try {
   assert(insertedChecks.every((check) => check.mode === 'lab' && check.program === 'vercel'));
   const submit = await post('/api/submit', { runId: run.body.id, humanValidated: true });
   assert.equal(submit.status, 400);
-  const capture = await post('/api/capture', {
+  const policyCapture = {
     programUrl: 'https://hackerone.com/vercel', capturedAt: new Date().toISOString(),
     visibleText: 'Vercel REST API. Cross-tenant testing: always use two accounts you own. Scanner rate limits: 5 QPS.',
-  });
+  };
+  const manual = await post('/api/capture', policyCapture);
+  assert.equal(manual.body.source, 'manual');
+  assert.equal(manual.body.liveEligible, false);
+  assert.equal((await fetch(`${base}/api/status`).then((response) => response.json())).captureReady, false);
+  const manualIntake = await post('/api/intake', { url: 'https://hackerone.com/vercel' });
+  assert.equal(manualIntake.body.source, 'manual');
+  assert.match(manualIntake.body.limitations.join(' '), /live mode/i);
+  const capture = await post('/api/capture', policyCapture, 'chrome-extension://abcdefghijklmnopqrstuvwxyzabcdef');
   assert.equal(capture.status, 200);
+  assert.equal(capture.body.source, 'browser');
+  assert.equal(capture.body.liveEligible, true);
   const intake = await post('/api/intake', { url: 'https://hackerone.com/vercel' });
   assert.equal(intake.status, 200);
   assert.equal(intake.body.source, 'browser');

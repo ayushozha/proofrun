@@ -1,29 +1,35 @@
-# ProofRun demo and submission copy
+# ProofRun three-minute demo
 
-Lead the three-minute video with a **completed live structured-scope watch** at `http://127.0.0.1:8787/`. The watch fetches Vercel's current HackerOne structured scope, stores a baseline in ClickHouse, and compares later snapshots. It makes no Vercel target request. A first run is a baseline, not a discovered scope change. The watch tracks asset identifiers and submission/bounty eligibility; it does not detect edits to free-text program policy or per-asset instructions. Record the watch result and four-service trace only after a real run succeeds; the status panel shows configuration, and `npm run smoke` uses mocks. The project-access demo that follows is a synthetic local lab, never a Vercel finding.
+The primary demo is a bounded Acronis HackerOne check. ProofRun reads the current program scope, asks the four sponsor services to evaluate a fixed plan, then sends **one inert, read-only search-marker request** to the public search endpoint. A reflected marker alone is inconclusive, so the result creates no vulnerability report and submits nothing.
 
-Guild dispatch can take a few minutes. Record the watch click, then cut to its completed result in the same browser tab. Pre-run the watch before a stage demo. Refresh the pinned Senso policy content ID after seeding the current [policy](docs/proofrun-policy.md); a stale passage can stop the watch.
+Observed live result: the HackerOne scope check passed; one Acronis search GET returned HTTP 200; the response exceeded ProofRun's 256 KiB read cap; the marker was **not seen in the captured first 256 KiB**. The ClickHouse query took 96 ms. This does not establish whether the marker appears later in the response, and no vulnerability report was generated.
 
-Observed on October 9 at 2:19 PM PT: the live Vercel HackerOne API returned 25 structured-scope entries. ProofRun compared them with the earlier ClickHouse baseline and displayed **unchanged**, a 121 ms ClickHouse query, and a completed eight-step sponsor/source trace. This is a recorded scope observation, not a vulnerability finding.
+Record a new live run only after the updated Senso policy and Guild gate are published and the H1 API, AkashML, and ClickHouse connections are configured. Do not rerun the target request just to improve the recording. If a gate fails, show the failure honestly; the previously verified Vercel policy watch is a separate fallback demonstration, not evidence of an Acronis probe.
 
-## Three-minute shot list
+## Before recording
 
-| Time | Screen and action | Narration |
+1. Seed the updated ProofRun policy in Senso, point the local configuration at its content ID, publish the Guild gate, and restart the local server. Check that the Acronis plan is accepted before any target request.
+2. Open the local app at http://127.0.0.1:8787/ and confirm the Acronis URL is selected. The intake should identify its source as the HackerOne API and show eligible Acronis scope.
+3. Keep the terminal, browser password manager, and ignored .env off-screen. The video should show only the app, sourced policy, execution trace, and result.
+4. If recording a new execution, run the live check once and save its result and source links. If showing the prior result, call it a recorded run. A failed gate or unreachable search page is a truthful result; do not substitute a synthetic lab trace.
+
+## Shot list
+
+| Time | Show | Say |
 | --- | --- | --- |
-| 0:00–0:20 | Show the live monitor and enter `https://hackerone.com/vercel`; click **Watch HackerOne policy**. | “ProofRun monitors a real bounty program through HackerOne's structured-scope API. This action is read-only and does not probe a target.” |
-| 0:20–0:55 | Cut to the completed watch: source link, fetch time, scope count, and baseline/unchanged/changed label. | “ClickHouse stores each snapshot and compares it with the previous one when present. This result is a baseline if it is the first observation; later runs show exact scope additions and removals.” |
-| 0:55–1:25 | Show the watch trace and ClickHouse query latency. | “Senso supplied our pinned policy passage, Guild approved this bounded action, AkashML selected the policy watch and wrote a sourced alert, and ClickHouse compared and stored the scope. Every sponsor call is visible.” |
-| 1:25–1:50 | Move to the project-access workbench; select **Use local sample for a lab walkthrough**. | “The second path demonstrates the project-access workflow. These account and project observations are synthetic, clearly marked as a local lab.” |
-| 1:50–2:20 | Show the completed lab result, evidence timeline, sponsor trace, and verdict. | “The lab fixture deliberately returns the owner marker to both simulated accounts. That creates a lab-only candidate, not a Vercel vulnerability.” |
-| 2:20–2:40 | Show the report draft and blocked submission; briefly show the live prerequisites. | “Live project access stays gated on signed-in policy capture and two distinct researcher-owned alias accounts. A candidate still needs independent reproduction and impact evidence.” |
-| 2:40–3:00 | End on the source-linked watch alert and repository README. | “The useful action today is persistent, sourced policy monitoring. The lab teaches the verification flow; no bounty or HackerOne report is claimed.” |
+| 0:00–0:20 | Acronis URL, supported checks, single-request boundary | “Give ProofRun a HackerOne program URL. Today it supports this bounded Acronis check and a separate Vercel adapter.” |
+| 0:20–0:45 | Review current scope and policy, with HackerOne API source | “The target and permitted action come from the live program scope and a fixed policy; reviewing scope sends no target request.” |
+| 0:45–1:10 | Start one live check; show Senso, Guild, and AkashML gates | “The services evaluate the plan before the request. A deny stops execution.” |
+| 1:10–1:40 | Public-search evidence: HTTP 200, 256 KiB cap, marker field, inconclusive verdict | “One inert search-marker request returned HTTP 200. The response exceeded our 256 KiB cap; the marker was not seen in the bytes we read. We cannot infer what the rest of the response contained.” |
+| 1:40–2:05 | ClickHouse event, 96 ms query, and sponsor trace | “The observation and sponsor decisions are recorded for review. This query took 96 milliseconds.” |
+| 2:05–2:25 | Result and report panel | “This check is inconclusive. ProofRun produces no report and does not submit one.” |
+| 2:25–2:45 | Optional Vercel policy-watch history | “Separately, ProofRun monitors structured program-scope changes. This is monitoring, not a vulnerability finding.” |
+| 2:45–3:00 | Vercel account-check gate and repo link | “The Vercel project-access check remains gated until two distinct owned accounts are available.” |
 
-If the live watch fails, show the error honestly and do not describe the watch as exercised. The completed real-service lab can still demonstrate Guild, Senso, AkashML, and ClickHouse. Never present mock smoke results as live service usage. Do not stage a fake scope change or present a baseline as one. Redact tokens and account identifiers in the recording.
+If a new run differs from the observed result, narrate its actual status and latency. Keep the distinction between an attempted request, a bounded HTTP response observation, and a verified finding clear.
 
-## Submission blurb
+## Submission wording
 
-Use this wording only after a completed real-service policy watch is visible in the recording:
+Use the recorded run's actual evidence. A suitable description of the observed run is: “ProofRun accepted the Acronis HackerOne URL, verified current scope through the HackerOne API, gated one read-only public-search marker request through Senso, Guild, and AkashML, and stored the observed outcome in ClickHouse. The target returned HTTP 200; its response exceeded the 256 KiB read cap, and no marker appeared in the captured prefix. The check is inconclusive and produced no report.” If a new run differs or a provider fails, name that outcome instead.
 
-> **ProofRun** is a read-only bounty-policy monitor and bounded verification workbench. Given the Vercel HackerOne URL, it fetches current structured scope through the HackerOne researcher API, stores a persistent snapshot in ClickHouse, and displays a source-linked baseline or exact scope delta. Senso supplies versioned policy context, Guild gates the action, and AkashML selects the allowed watch and explains the comparison. A separate synthetic lab demonstrates a project-access check and a draft for human review. The live Vercel project check remains gated on current signed-in policy capture and two compliant owned accounts. We do not claim a Vercel vulnerability or an automated HackerOne submission.
-
-**Prize claims:** Tick ClickHouse, Guild, Akash, and Senso categories only when their real calls appear in the recorded watch or completed lab trace. Tick Semgrep's vulnerability prize only with an actual, interesting Semgrep finding in AI-generated code and its reproducible evidence. Pi's overall category can be entered on the strength of the finished demo; no prize is guaranteed. Add the public repository URL, shareable video link, team names, and contact emails after checking them.
+List sponsor prize categories only for real integrations shown in the trace. A Semgrep prize claim requires a genuine Semgrep finding; running a scan alone is not a finding.

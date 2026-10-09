@@ -1,13 +1,20 @@
+import { createHash, randomBytes } from 'node:crypto';
+
 const HACKERONE_API = 'https://api.hackerone.com/v1/hackers';
 const VERCEL_API = 'https://api.vercel.com';
+const ACRONIS_PROGRAM_URL = 'https://hackerone.com/acronis';
+const ACRONIS_SEARCH_URL = 'https://www.acronis.com/en/search/';
+let lastAcronisProbeAt = 0;
 
 export function parseProgramUrl(value) {
   let url;
   try { url = new URL(value); } catch { throw new Error('Enter a HackerOne program URL.'); }
-  if (url.protocol !== 'https:' || url.hostname !== 'hackerone.com' || !/^\/vercel\/?$/.test(url.pathname)) {
-    throw new Error('This prototype supports only the Vercel HackerOne program.');
+  if (url.protocol !== 'https:' || url.hostname !== 'hackerone.com') {
+    throw new Error('Enter a supported HackerOne program URL.');
   }
-  return 'https://hackerone.com/vercel';
+  if (/^\/vercel\/?$/.test(url.pathname)) return 'https://hackerone.com/vercel';
+  if (/^\/acronis\/?$/.test(url.pathname)) return ACRONIS_PROGRAM_URL;
+  throw new Error('This prototype supports the Vercel and Acronis HackerOne programs.');
 }
 
 export function captureIsUsable(capture) {
@@ -60,6 +67,92 @@ export async function fetchProgramScope() {
       platformApi: /vercel rest api/i.test(attributes.policy || ''),
     },
   };
+}
+
+/** Confirm the one public Acronis host from the current HackerOne program and structured scope. */
+export async function fetchAcronisScope() {
+  const headers = { Authorization: h1Auth(), Accept: 'application/json' };
+  const [program, scopes] = await Promise.all([
+    jsonFetch(`${HACKERONE_API}/programs/acronis`, { headers }, 'HackerOne Acronis program lookup'),
+    jsonFetch(`${HACKERONE_API}/programs/acronis/structured_scopes?page%5Bsize%5D=100`, { headers }, 'HackerOne Acronis scope lookup'),
+  ]);
+  const attributes = program?.attributes || program?.data?.attributes || {};
+  if (attributes.handle !== 'acronis' || attributes.submission_state !== 'open') {
+    throw new Error('Acronis program is not open for submissions in the HackerOne API.');
+  }
+  if (!Array.isArray(scopes?.data)) throw new Error('HackerOne returned incomplete Acronis structured scope.');
+  const matching = scopes.data.filter((item) => item?.attributes?.asset_identifier === '*.acronis.com');
+  const wildcard = matching.find((item) => item.attributes.eligible_for_submission === true);
+  const excludedHost = scopes.data.some((item) => item?.attributes?.asset_identifier === 'www.acronis.com'
+    && item.attributes.eligible_for_submission === false);
+  if (!wildcard || excludedHost) {
+    throw new Error('HackerOne did not confirm www.acronis.com in eligible Acronis scope.');
+  }
+  const policy = String(attributes.policy || '');
+  const policyChecks = {
+    automatedScanning: /automated scanning against web resources and api/i.test(policy),
+    aliasUserAgent: /@wearehackerone.{0,100}user-agent|user-agent.{0,100}@wearehackerone/is.test(policy),
+    rateLimit: /5 requests per second/i.test(policy),
+  };
+  if (!Object.values(policyChecks).every(Boolean)) {
+    throw new Error('Current Acronis policy did not confirm every automated-test boundary.');
+  }
+  return {
+    id: wildcard.id,
+    identifier: wildcard.attributes.asset_identifier,
+    updatedAt: wildcard.attributes.updated_at,
+    policyHash: createHash('sha256').update(policy).digest('hex'),
+    policyChecks,
+  };
+}
+
+/** One inert, rate-limited public search GET. Reflection alone is never a finding. */
+export async function probeAcronisSearch() {
+  const handle = process.env.HACKERONE_API_USERNAME?.trim();
+  if (!/^[A-Za-z0-9_-]{1,64}$/.test(handle || '')) throw new Error('A valid HackerOne username is required for the Acronis User-Agent.');
+  const waitMs = 1000 - (Date.now() - lastAcronisProbeAt);
+  if (waitMs > 0) await new Promise((resolve) => setTimeout(resolve, waitMs));
+  lastAcronisProbeAt = Date.now();
+  const marker = `proofrun${randomBytes(8).toString('hex')}`;
+  const url = new URL(ACRONIS_SEARCH_URL);
+  url.searchParams.set('query', marker);
+  let response;
+  try {
+    response = await fetch(url, {
+      method: 'GET', redirect: 'error', signal: AbortSignal.timeout(10000),
+      headers: { Accept: 'text/html', 'User-Agent': `ProofRun/0.1 (${handle}@wearehackerone.com)` },
+    });
+  } catch {
+    return { actor: 'public_search', status: 0, markerReflected: false, responseCapped: false, detail: 'The bounded GET failed or redirected; no further target request was made.' };
+  }
+  const reader = response.body?.getReader();
+  const chunks = [];
+  let total = 0;
+  let capped = false;
+  if (reader) {
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        const remaining = 256 * 1024 - total;
+        if (value.length > remaining) {
+          if (remaining) chunks.push(value.subarray(0, remaining));
+          capped = true;
+          break;
+        }
+        chunks.push(value);
+        total += value.length;
+      }
+    } finally {
+      if (capped) await reader.cancel().catch(() => {});
+      reader.releaseLock();
+    }
+  }
+  const markerReflected = Buffer.concat(chunks).includes(Buffer.from(marker));
+  const detail = capped ? 'Response exceeded the 256 KiB observation cap; no finding can be inferred.'
+    : markerReflected ? 'The inert query marker appeared in the response; reflection alone is not a vulnerability.'
+      : 'The inert query marker was not observed in the bounded response; no vulnerability was established.';
+  return { actor: 'public_search', status: response.status, markerReflected, responseCapped: capped, detail };
 }
 
 /** Read every structured-scope page for a read-only program-policy snapshot. */
