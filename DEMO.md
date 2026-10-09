@@ -4,7 +4,7 @@ Lead with the **owned-site audit of ayushojha.com**. ProofRun accepts that exact
 
 The recorded owned-site run found **11 Semgrep source candidates** for broad signed-in-user access callbacks. The anonymous `/api/access` request returned **HTTP 200**. These facts do **not** prove that the same source revision is deployed, that any account can access another person's records, or that the permissions violate the site's intended policy. Label the result **source only**. ProofRun neither creates nor submits a HackerOne report for this run.
 
-The paired training target is a short second moment: its intentionally exposed case produces a candidate and its protected case produces the expected denial. It proves the detector distinguishes those controlled cases, not that the hosted site has the same defect.
+Keep the recording on the owned-site result for the full three minutes. If a paired training result has been recorded separately, it can be used as a brief cutaway: its intentionally exposed case produces a candidate and its protected case produces the expected denial. That proves the detector distinguishes those controlled cases, not that the hosted site has the same defect.
 
 ## Before recording
 
@@ -23,9 +23,9 @@ The paired training target is a short second moment: its intentionally exposed c
 | 1:15–1:50 | Eleven findings; highlight ContactSubmissions read/update and Products create/update | “Semgrep found eleven source-level candidates. Here are two worth reviewing: signed-in users appear broadly permitted to read or update contact submissions, and to create or update products. These are code matches, not yet confirmed exploits.” |
 | 1:50–2:20 | Source revision, `/api/access` HTTP status, confidence label | “The live site returned HTTP 200 for an anonymous access-capability request. That only shows this public endpoint responded. I have not proven which source revision is deployed, and I have not shown an unauthorized account reading or changing data. ProofRun marks this source only.” |
 | 2:20–2:40 | ClickHouse query timing and AkashML review note; no report state | “ClickHouse makes the run and its findings inspectable; the query time shown here comes from this run. The review note lists what a human should validate next. There is no HackerOne report or automatic submission.” |
-| 2:40–3:00 | Paired training target: exposed candidate beside protected expected | “To test the detector itself, I also run two controlled cases. It flags the intentionally exposed case and recognizes the protected case. That is a training result; the hosted-site finding remains unverified.” |
+| 2:40–3:00 | Stay on the validation questions and source-only label | “The next step is a controlled test with a low-privilege account and confirmation of the deployed revision. Until then, ProofRun stops at a source candidate. It does not turn a plausible code pattern into a vulnerability claim.” |
 
-Speak to the screen if a new run differs. Do not read out a fixed query latency, commit SHA, or finding count unless it is visible in the recorded run. If the paired training run was not recorded, spend the final 20 seconds on the source findings and their validation questions instead.
+Speak to the screen if a new run differs. Do not read out a fixed query latency, commit SHA, or finding count unless it is visible in the recorded run. Use the paired training result only as an optional pre-recorded cutaway, never as evidence about the hosted site.
 
 ## Submission wording
 
