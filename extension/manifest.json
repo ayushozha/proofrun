@@ -1,0 +1,11 @@
+{
+  "manifest_version": 3,
+  "name": "ProofRun Program Capture",
+  "version": "0.1.0",
+  "description": "Capture the visible Vercel HackerOne program policy for a local ProofRun case.",
+  "action": {
+    "default_popup": "popup.html"
+  },
+  "permissions": ["activeTab", "scripting"],
+  "host_permissions": ["http://127.0.0.1:8787/*"]
+}

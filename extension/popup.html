@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>ProofRun capture</title>
+    <style>
+      body { box-sizing: border-box; width: 320px; margin: 0; padding: 18px; background: #10181c; color: #e7f0ed; font: 13px/1.45 system-ui, sans-serif; }
+      h1 { margin: 0 0 10px; font-size: 18px; line-height: 1.2; }
+      p { margin: 0 0 14px; color: #b8c9c3; }
+      button { width: 100%; border: 0; border-radius: 8px; padding: 11px 14px; background: #b8ef5e; color: #17210b; font: 700 13px system-ui, sans-serif; cursor: pointer; }
+      button:disabled { opacity: .55; cursor: wait; }
+      #status { min-height: 38px; margin: 12px 0 0; color: #d1dfd9; }
+      #status.error { color: #ffac9e; }
+    </style>
+  </head>
+  <body>
+    <h1>ProofRun</h1>
+    <p>Open the Vercel HackerOne program in this browser, then capture its visible policy and scope for your local case.</p>
+    <button id="capture" type="button">Capture program</button>
+    <p id="status" role="status" aria-live="polite">No page has been captured.</p>
+    <script src="popup.js"></script>
+  </body>
+</html>
