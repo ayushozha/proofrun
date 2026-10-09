@@ -2,7 +2,7 @@
 
 ProofRun is a hackathon prototype for one bounded bug-bounty workflow: capture the signed-in [Vercel HackerOne program](https://hackerone.com/vercel) policy, compare a private Vercel project read from two researcher-owned accounts, and prepare an evidence-based report for human review.
 
-Guild must approve each run, AkashML must select the allowed check, and ClickHouse stores normalized observations and computes the candidate/expected/inconclusive verdict. A missing sponsor connection stops the run. The local lab is deliberately vulnerable and is labeled as training data; it is never reportable.
+Guild must approve each run, AkashML must select the allowed check, and ClickHouse stores normalized observations with a lab/live label and computes the candidate/expected/inconclusive verdict. A missing sponsor connection stops the run. The local lab is deliberately vulnerable and is labeled as training data; it is never reportable.
 
 ## Run locally
 
@@ -17,6 +17,8 @@ npm start
 Open `http://127.0.0.1:8787`. Load the [Edge/Chrome capture extension](extension/README.md), visit the Vercel program while signed in, click the extension's **Capture program** button, then return to ProofRun and select **Capture program** in the app. The browser login is used only to read the visible policy. The HackerOne API uses its own researcher API token.
 
 The `.env.example` file lists every required variable. For Guild, publish and install the narrow [gate agent](guild/README.md) first. Set `AKASHML_MODEL` in `.env`; the application contains no fixed model ID. The ClickHouse URL must be its HTTP endpoint. For a live check, `VERCEL_PROJECT_ID` must belong to the account behind `VERCEL_OWNER_TOKEN`; `VERCEL_OTHER_TOKEN` must belong to a separate account you own that is not a member of the owner's team. Set optional `VERCEL_TEAM_ID` for a team-owned project; ProofRun sends the same team ID in all three control requests. Use Vercel's required researcher alias when registering test accounts.
+
+The demo's [ClickHouse Cloud service](https://console.clickhouse.cloud/services/7cec452a-7fa4-419a-82c3-1710d18aca49/console/database/default/table/proofrun_checks) is `proofrun` on the Basic plan in AWS Oregon. The app writes normalized lab/live checks to a native MergeTree table over HTTPS SQL, then queries ClickHouse for its verdict. [Recorded lab rows](docs/assets/clickhouse-proofrun.png) show the Cloud path. The service idles after 15 minutes and allows the current browser and local-app egress IPs; update its IP access list if the demo moves networks.
 
 ## Workflow and limits
 

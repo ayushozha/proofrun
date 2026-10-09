@@ -118,7 +118,7 @@ async function handleRun(body) {
   if (plan.check !== 'project_access') throw new Error('AkashML did not select the approved project-access check.');
 
   const checks = await probeProject(mode, port);
-  const analysis = await recordWithClickHouse({ id, programHandle: 'vercel', checks });
+  const analysis = await recordWithClickHouse({ id, programHandle: 'vercel', mode, checks });
   sponsorTrace.push({ tool: 'ClickHouse', status: 'queried', detail: `${analysis.recorded} normalized observations; verdict ${analysis.verdict}; query ${analysis.queryLatencyMs} ms` });
   const reviewNote = await explainWithAkash({ verdict: analysis.verdict, checks });
   sponsorTrace.push({ tool: 'AkashML', status: 'explained', detail: 'Produced bounded questions for human review.' });

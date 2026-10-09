@@ -135,8 +135,9 @@ function normalizedChecks(checks) {
 function normalizedRun(run) {
   if (!/^[a-zA-Z0-9_-]{8,80}$/.test(run?.id || '')) throw new Error('Invalid run ID');
   if (run?.programHandle !== 'vercel') throw new Error('Unsupported program');
+  if (!['lab', 'live'].includes(run?.mode)) throw new Error('Invalid run mode');
   return normalizedChecks(run.checks).map(({ actor, status, ownerMarkerPresent }) => ({
-    run_id: run.id, program: 'vercel', actor, status, owner_marker: Number(ownerMarkerPresent),
+    run_id: run.id, program: 'vercel', mode: run.mode, actor, status, owner_marker: Number(ownerMarkerPresent),
   }));
 }
 
@@ -158,9 +159,9 @@ async function clickhouse(sql, data) {
 export async function recordWithClickHouse(run) {
   const checks = normalizedRun(run);
   await clickhouse(`CREATE TABLE IF NOT EXISTS ${TABLE} (
-    run_id String, program LowCardinality(String), actor LowCardinality(String),
+    run_id String, program LowCardinality(String), mode LowCardinality(String), actor LowCardinality(String),
     status UInt16, owner_marker UInt8, created_at DateTime64(3) DEFAULT now64(3)
-  ) ENGINE = MergeTree ORDER BY (run_id, actor, created_at)`);
+  ) ENGINE = MergeTree ORDER BY (mode, run_id, actor, created_at)`);
   await clickhouse(`INSERT INTO ${TABLE} FORMAT JSONEachRow`, checks.map((check) => JSON.stringify(check)).join('\n'));
   const safeId = checks[0].run_id.replace(/'/g, "''");
   const queryStarted = performance.now();
@@ -169,7 +170,7 @@ export async function recordWithClickHouse(run) {
     countIf(actor = 'other' AND status >= 200 AND status < 300 AND owner_marker = 1) AS other_read,
     countIf(actor = 'other' AND status IN (401, 403, 404)) AS other_denied,
     countIf(actor = 'anonymous' AND status IN (401, 403, 404)) AS anonymous_denied
-    FROM ${TABLE} WHERE run_id = '${safeId}' FORMAT JSONEachRow`);
+    FROM ${TABLE} WHERE mode = '${run.mode}' AND run_id = '${safeId}' FORMAT JSONEachRow`);
   let metrics;
   try { metrics = JSON.parse(raw.trim()); } catch { throw new Error('ClickHouse returned an invalid comparison'); }
   const counts = Object.fromEntries(['owner_read', 'other_read', 'other_denied', 'anonymous_denied']

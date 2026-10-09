@@ -6,6 +6,7 @@ import { once } from 'node:events';
 
 const stubs = { guildStarts: 0, guildCompletes: 0, akash: 0, clickhouse: 0 };
 const sessions = new Map();
+const insertedChecks = [];
 const stub = http.createServer(async (request, response) => {
   const url = new URL(request.url, 'http://127.0.0.1');
   const body = await new Promise((resolve) => { let value = ''; request.on('data', (part) => value += part); request.on('end', () => resolve(value)); });
@@ -33,6 +34,9 @@ const stub = http.createServer(async (request, response) => {
     response.end(JSON.stringify({ items: [{ type: 'runtime_done', content: { text: JSON.stringify(decision) } }] }));
   } else if (url.pathname === '/') {
     stubs.clickhouse++;
+    if (url.searchParams.get('query')?.startsWith('INSERT INTO')) {
+      insertedChecks.push(...body.trim().split('\n').map((row) => JSON.parse(row)));
+    }
     response.setHeader('Content-Type', 'text/plain');
     response.end(body.includes('SELECT') ? JSON.stringify({ owner_read: 1, other_read: 1, other_denied: 0, anonymous_denied: 0 }) : '');
   } else {
@@ -90,6 +94,8 @@ try {
   assert.equal(run.body.sponsorTrace.length, 5);
   assert.equal(run.body.reviewNote.validationQuestions.length, 1);
   assert.equal(typeof run.body.queryLatencyMs, 'number');
+  assert.equal(insertedChecks.length, 2);
+  assert(insertedChecks.every((check) => check.mode === 'lab' && check.program === 'vercel'));
   const submit = await post('/api/submit', { runId: run.body.id, humanValidated: true });
   assert.equal(submit.status, 400);
   assert.deepEqual(stubs, { guildStarts: 1, guildCompletes: 1, akash: 2, clickhouse: 3 });
