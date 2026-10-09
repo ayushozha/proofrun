@@ -27,7 +27,8 @@
           <p class="micro-label intro-kicker">PROOFRUN / SCOPED BOUNTY VERIFICATION</p>
           <h1 id="page-title">Start with a program.<br>Finish with evidence<span>.</span></h1>
           <p class="intro-copy">Give ProofRun a supported HackerOne program URL. It confirms the current scope, runs only that program’s bounded check, and separates real observations from reportable findings.</p>
-          <div class="hero-boundary"><span class="hero-boundary-mark" aria-hidden="true">↗</span><div><strong>SUPPORTED CHECKS TODAY</strong><span><b>Acronis</b> · one read-only search-marker request</span><span><b>Vercel</b> · project read across two researcher-owned accounts</span></div><a href="#intake-title">Start a case <span aria-hidden="true">→</span></a></div>
+          <div class="hero-boundary"><span class="hero-boundary-mark" aria-hidden="true">↗</span><div><strong>SUPPORTED CHECKS TODAY</strong><span><b>Acronis</b> · one read-only search-marker request</span><span><b>Vercel</b> · project read across two researcher-owned accounts</span><span><b>Controlled training</b> · exposed and protected authorization paths</span></div><a href="#intake-title">Start a case <span aria-hidden="true">→</span></a></div>
+          <button id="lab-shortcut" class="lab-shortcut" type="button">See the paired training check <span aria-hidden="true">→</span></button>
         </section>
 
         <section class="step-section intake-panel" aria-labelledby="intake-title">
@@ -56,7 +57,7 @@
                 <li>Sign in to HackerOne and open the <a href="https://hackerone.com/vercel" target="_blank" rel="noopener noreferrer">Vercel program</a>.</li>
                 <li>Click the extension’s <strong>Capture program</strong> action. Return here and press <strong>Load and review scope</strong> for the same URL.</li>
               </ol></details>
-              <button id="sample-button" class="text-button" type="button" hidden>Use local sample for a lab walkthrough <span aria-hidden="true">→</span></button>
+              <button id="sample-button" class="text-button" type="button" hidden>Load the controlled training case <span aria-hidden="true">→</span></button>
             </div>
             <div id="program-details" class="program-details" hidden>
               <div class="program-line"><div><p class="micro-label">PROGRAM UNDER REVIEW</p><h3 id="program-name"></h3></div><span id="program-source" class="tag"></span></div>
@@ -74,7 +75,7 @@
           <div class="step-body">
             <fieldset class="mode-selector"><legend class="visually-hidden">Run mode</legend>
               <label class="mode-card" for="mode-live"><input id="mode-live" type="radio" name="run-mode" value="live" checked><span class="mode-text"><strong>Bounded live check</strong><small id="live-mode-description">One read-only public-search marker request. Current Acronis scope required.</small></span><span class="mode-hint">SCOPED</span></label>
-              <label class="mode-card" for="mode-lab"><input id="mode-lab" type="radio" name="run-mode" value="lab" disabled><span class="mode-text"><strong>Local lab</strong><small>Vercel training fixture. Synthetic evidence, no target traffic.</small></span><span class="mode-hint">SYNTHETIC</span></label>
+              <label class="mode-card" for="mode-lab"><input id="mode-lab" type="radio" name="run-mode" value="lab" disabled><span class="mode-text"><strong>Controlled training check</strong><small>Compare exposed and protected local authorization paths. No HackerOne target traffic.</small></span><span class="mode-hint">TRAINING</span></label>
             </fieldset>
             <div class="run-footer"><button id="run-button" class="button button-primary" type="button" disabled>Run bounded check <span aria-hidden="true">→</span></button><p id="mode-note" class="mode-note" aria-live="polite">Capture a program to begin.</p></div>
           </div>
@@ -87,7 +88,16 @@
           </div></div>
           <div class="step-body">
             <div id="evidence-empty" class="empty-state"><div class="empty-glyph" aria-hidden="true"><svg viewBox="0 0 32 40" fill="none"><path d="M5 1h15l7 7v30H5zM20 1v8h7M10 17h12M10 23h12M10 29h8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div><p>No evidence yet</p><small>Run a bounded check to see its observations, source, and sponsor trace.</small></div>
-            <div id="evidence-results" hidden><div class="result-heading"><div><p class="micro-label">OBSERVED RESULT</p><strong id="result-verdict"></strong></div><div class="result-flags"><span id="query-latency" class="tag" hidden></span><span id="result-mode" class="tag"></span></div></div><p id="result-explanation" class="result-explanation"></p><ol id="evidence-list" class="evidence-list"></ol><div id="review-note" class="review-note" hidden><p class="micro-label">AKASHML REVIEW · UNVERIFIED</p><p id="review-summary"></p><ol id="review-questions" aria-label="Questions to validate"></ol></div></div>
+            <div id="evidence-results" hidden><div class="result-heading"><div><p class="micro-label">OBSERVED RESULT</p><strong id="result-verdict"></strong></div><div class="result-flags"><span id="query-latency" class="tag" hidden></span><span id="result-mode" class="tag"></span></div></div><p id="result-explanation" class="result-explanation"></p>
+              <section id="validation-results" class="validation-results" aria-label="Paired controlled validation" hidden>
+                <div class="validation-heading"><div><p class="micro-label">PAIRED CONTROL / LOCAL TRAINING TARGET</p><h3>Same check. Different boundary.</h3></div><span id="validation-status" class="validation-status"></span></div>
+                <div class="validation-grid">
+                  <article class="validation-card is-exposed"><div class="validation-card-top"><span class="validation-card-index">01 / EXPOSED</span><span class="validation-card-mark" aria-hidden="true">↗</span></div><h4 id="validation-exposed-verdict"></h4><p>Can the other account retrieve the owner's protected marker?</p><ol id="validation-exposed-evidence" aria-label="Exposed-path observations"></ol></article>
+                  <article class="validation-card is-protected"><div class="validation-card-top"><span class="validation-card-index">02 / PROTECTED</span><span class="validation-card-mark" aria-hidden="true">✓</span></div><h4 id="validation-patched-verdict"></h4><p>Does the same request stop at the corrected boundary?</p><ol id="validation-patched-evidence" aria-label="Protected-path observations"></ol></article>
+                </div>
+                <p class="validation-disclaimer">Controlled training target, not a HackerOne finding. The paired result demonstrates this check's detection behavior; it cannot be submitted as a bounty report.</p>
+              </section>
+              <ol id="evidence-list" class="evidence-list"></ol><div id="review-note" class="review-note" hidden><p class="micro-label">AKASHML REVIEW · UNVERIFIED</p><p id="review-summary"></p><ol id="review-questions" aria-label="Questions to validate"></ol></div></div>
           </div>
         </section>
 

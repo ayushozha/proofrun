@@ -33,6 +33,7 @@ function setBusy(busy, button, activeLabel) {
   $('program-url').disabled = busy;
   $('program-acronis').disabled = busy;
   $('program-vercel').disabled = busy;
+  $('lab-shortcut').disabled = busy;
   updateRunButton();
   updateCopyButton();
 }
@@ -91,7 +92,7 @@ function renderProgramChoice(resetMode = false) {
   $('run-description').textContent = acronis
     ? 'Acronis makes one inert, read-only search-marker request. Reflection alone is not a vulnerability.'
     : vercel
-      ? 'Vercel makes a limited project-read request through two accounts you own. The lab uses synthetic observations.'
+      ? 'Vercel makes a limited project-read request through two accounts you own. The local training check compares exposed and protected paths.'
       : 'Each program has its own bounded check. Review the current scope before choosing a mode.';
   $('handoff-note').hidden = !vercel;
   if (!state.run) {
@@ -105,7 +106,7 @@ function renderProgramChoice(resetMode = false) {
     $('capture-state').classList.toggle('is-ready', Boolean(state.intake?.program?.handle === 'acronis' || state.status?.hackerone?.apiConfigured));
   } else if (vercel) {
     const source = state.intake?.source || state.status?.captureSource;
-    $('capture-state').textContent = state.intake?.labOnly ? 'Local sample loaded' : source === 'manual' ? 'Manual review only' : source === 'browser' ? 'Capture received' : 'Waiting for capture';
+    $('capture-state').textContent = state.intake?.labOnly ? 'Training case loaded' : source === 'manual' ? 'Manual review only' : source === 'browser' ? 'Capture received' : 'Waiting for capture';
     $('capture-state').classList.toggle('is-ready', Boolean(state.intake?.labOnly || source === 'browser'));
   } else {
     $('capture-state').textContent = 'Choose program';
@@ -151,7 +152,7 @@ function renderStatus(data) {
   $('identity-status').textContent = data.hackerone?.idVerified === true ? 'Verified' : data.hackerone?.idVerified === false ? 'Not verified' : 'Not checked';
   const captureSource = data.captureSource || state.intake?.source;
   const captured = captureSource === 'browser' || (!captureSource && Boolean(data.captureReady));
-  $('capture-state').textContent = state.intake?.labOnly ? 'Local sample loaded' : captureSource === 'manual' ? 'Manual review only' : captured ? 'Capture received' : 'Waiting for capture';
+  $('capture-state').textContent = state.intake?.labOnly ? 'Training case loaded' : captureSource === 'manual' ? 'Manual review only' : captured ? 'Capture received' : 'Waiting for capture';
   $('capture-state').classList.toggle('is-ready', captured || Boolean(state.intake?.labOnly));
   renderProgramChoice();
 }
@@ -169,15 +170,15 @@ function renderIntake(data) {
   state.intake = data;
   state.intakeUrl = $('program-url').value.trim();
   state.run = null;
-  $('capture-state').textContent = data.labOnly ? 'Local sample loaded' : data.source === 'browser' ? 'Capture received' : data.source === 'manual' ? 'Manual review only' : 'Waiting for capture';
+  $('capture-state').textContent = data.labOnly ? 'Training case loaded' : data.source === 'browser' ? 'Capture received' : data.source === 'manual' ? 'Manual review only' : 'Waiting for capture';
   $('capture-state').classList.toggle('is-ready', Boolean(data.labOnly || data.source === 'browser'));
   resetRunDisplay();
   $('program-details').hidden = false;
-  $('program-name').textContent = data.program?.name || data.program?.handle || 'Program';
-  $('program-source').textContent = data.source === 'browser' ? 'BROWSER CAPTURE' : data.source === 'manual' ? 'MANUAL TEXT · REVIEW ONLY' : data.source === 'hackerone_api' ? 'HACKERONE API' : data.source === 'local_sample' ? 'LOCAL SAMPLE · SYNTHETIC' : String(data.source || 'SOURCE UNAVAILABLE').toUpperCase();
-  $('source-program-title').textContent = data.labOnly ? 'Local fixture' : 'HackerOne';
+  $('program-name').textContent = data.labOnly ? 'Controlled authorization training case' : data.program?.name || data.program?.handle || 'Program';
+  $('program-source').textContent = data.source === 'browser' ? 'BROWSER CAPTURE' : data.source === 'manual' ? 'MANUAL TEXT · REVIEW ONLY' : data.source === 'hackerone_api' ? 'HACKERONE API' : data.source === 'local_sample' ? 'LOCAL TRAINING TARGET' : String(data.source || 'SOURCE UNAVAILABLE').toUpperCase();
+  $('source-program-title').textContent = data.labOnly ? 'Training target' : 'HackerOne';
   $('source-program').classList.toggle('is-ready', data.source === 'browser' || data.source === 'hackerone_api');
-  $('source-program-detail').textContent = data.labOnly ? 'Synthetic local fixture. It is not current HackerOne scope.' : data.program?.handle === 'acronis' ? 'Current HackerOne structured scope for one read-only public-search check.' : data.source === 'browser' ? 'Signed-in browser capture received; structured scope is checked separately.' : data.source === 'manual' ? 'Pasted policy text is review-only and cannot authorize a live check.' : 'Structured API scope received without signed-in browser capture.';
+  $('source-program-detail').textContent = data.labOnly ? 'Controlled local training target. It is not current HackerOne scope.' : data.program?.handle === 'acronis' ? 'Current HackerOne structured scope for one read-only public-search check.' : data.source === 'browser' ? 'Signed-in browser capture received; structured scope is checked separately.' : data.source === 'manual' ? 'Pasted policy text is review-only and cannot authorize a live check.' : 'Structured API scope received without signed-in browser capture.';
   $('program-asset').textContent = data.policy?.asset || 'No asset specified in the reviewed scope';
   listText($('program-rules'), Array.isArray(data.policy?.rules) ? data.policy.rules : []);
   const scopes = $('scope-list');
@@ -208,7 +209,7 @@ function updateModeNote() {
     .filter(([key]) => !connected(readiness?.sponsors?.[key])).map(([, label]) => label);
   let note;
   if (!state.intake) note = program === 'acronis' ? 'Review current HackerOne scope to enable one read-only search-marker request.'
-    : program === 'vercel' ? 'Capture the signed-in program, or load the local sample for a lab walkthrough.'
+    : program === 'vercel' ? 'Capture the signed-in program, or load the controlled training case.'
       : 'Enter the Acronis or Vercel HackerOne program URL to begin.';
   else if (program === 'acronis' && missing.length) note = `Configure ${missing.join(', ')} in the local .env before the Acronis probe.`;
   else if (program === 'acronis' && !readiness?.hackerone?.apiConfigured) note = 'The Acronis probe needs the HackerOne API credentials for current program scope.';
@@ -216,7 +217,7 @@ function updateModeNote() {
   else if (program === 'acronis') note = 'Ready for one inert, read-only search-marker request. Reflection alone is not a vulnerability.';
   else if (mode === 'live' && state.intake.labOnly) note = `The local sample cannot authorize live testing. Capture the signed-in program.${missing.length ? ` Also configure ${missing.join(', ')} in the local .env.` : ''}`;
   else if (missing.length) note = `Configure ${missing.join(', ')} in the local .env before running.`;
-  else if (mode === 'lab') note = 'Lab mode produces synthetic evidence. It cannot establish a bounty finding.';
+  else if (mode === 'lab') note = 'Ready to compare exposed and protected local training paths. This cannot establish a bounty finding.';
   else if (state.intake.source !== 'browser' && readiness?.captureReady) note = 'Browser capture received. Load and review this program again before a live check.';
   else if (state.intake.source !== 'browser' || !readiness?.captureReady) note = 'Live mode requires a current signed-in browser capture.';
   else if (!readiness?.hackerone?.apiConfigured || state.intake.limitations?.some((item) => /live mode is blocked/i.test(item))) note = 'Live mode also needs HackerOne structured scope and confirmed policy checks.';
@@ -230,7 +231,7 @@ function updateRunButton() {
   const button = $('run-button');
   const program = state.intake?.program?.handle || selectedProgram();
   if (!state.busy) {
-    button.textContent = selectedMode() === 'lab' ? 'Run synthetic lab →' : program === 'acronis' ? 'Run one read-only probe →' : 'Run bounded live check →';
+    button.textContent = selectedMode() === 'lab' ? 'Run paired training check →' : program === 'acronis' ? 'Run one read-only probe →' : 'Run bounded live check →';
     button.dataset.label = button.textContent;
   }
   const sponsorsReady = ['guild', 'akash', 'clickhouse', 'senso'].every((key) => connected(state.status?.sponsors?.[key]));
@@ -304,6 +305,40 @@ function renderWatch(data) {
   if (!trace.children.length) trace.append(createElement('li', '', 'No sponsor calls recorded.'));
 }
 
+function renderValidation(validation) {
+  const section = $('validation-results');
+  section.hidden = !validation;
+  if (!validation) return;
+  const passed = validation.passed === true;
+  const status = $('validation-status');
+  status.dataset.passed = String(passed);
+  status.textContent = passed ? 'CONTROL CONFIRMED' : 'CONTROL INCOMPLETE';
+  const labels = {
+    candidate: 'Cross-account read observed',
+    exposed: 'Cross-account read observed',
+    confirmed: 'Cross-account read observed',
+    expected: 'Access boundary held',
+    protected: 'Access boundary held',
+    blocked: 'Access boundary held',
+    inconclusive: 'Evidence inconclusive',
+  };
+  for (const [kind, target] of [['exposed', 'validation-exposed-evidence'], ['patched', 'validation-patched-evidence']]) {
+    const result = validation[kind] || {};
+    $(kind === 'exposed' ? 'validation-exposed-verdict' : 'validation-patched-verdict').textContent =
+      labels[result.verdict] || (result.verdict ? `Result: ${String(result.verdict).replaceAll('_', ' ')}` : 'No verdict recorded');
+    const list = $(target);
+    list.replaceChildren();
+    for (const item of Array.isArray(result.evidence) ? result.evidence : []) {
+      const row = createElement('li', item.actor !== 'owner' && item.ownerMarkerPresent ? 'is-alert' : '');
+      const label = createElement('strong', '', item.actor || 'Check');
+      label.append(createElement('code', '', item.status === 0 ? 'NO RESPONSE' : item.status === undefined ? 'NO STATUS' : `HTTP ${item.status}`));
+      row.append(label, createElement('span', '', item.detail || 'No detail recorded.'));
+      list.append(row);
+    }
+    if (!list.children.length) list.append(createElement('li', 'is-empty', 'No observations recorded.'));
+  }
+}
+
 function renderEvidence(data) {
   const acronis = data.programHandle === 'acronis' || state.intake?.program?.handle === 'acronis';
   const acronisResponded = Number(data.evidence?.[0]?.status) > 0;
@@ -335,8 +370,18 @@ function renderEvidence(data) {
       : data.verdict === 'expected'
         ? 'The other account did not access the owner’s private project in this run.'
         : 'This run did not provide enough evidence to support a report.';
+  renderValidation(data.validation);
+  if (data.validation) {
+    $('source-evidence-detail').textContent = 'Two controlled local training paths were compared; no HackerOne target was tested.';
+    $('result-verdict').textContent = data.validation.passed === true ? 'Authorization failure reproduced in training' : 'Training control incomplete';
+    $('result-mode').textContent = 'CONTROLLED TRAINING · NOT HACKERONE';
+    $('result-explanation').textContent = data.validation.passed === true
+      ? 'The exposed path returned protected data to a second account while the corrected path held. This validates the check on a controlled training target, not a live bounty finding.'
+      : 'The paired exposed and protected paths did not establish the expected difference. Inspect both outcomes before claiming this check works.';
+  }
   const list = $('evidence-list');
   list.replaceChildren();
+  list.hidden = Boolean(data.validation && !data.evidence?.length);
   for (const item of Array.isArray(data.evidence) ? data.evidence : []) {
     const row = createElement('li', item.actor !== 'owner' && item.ownerMarkerPresent ? 'is-alert' : '');
     const dot = createElement('span', 'timeline-dot');
@@ -363,7 +408,7 @@ function renderEvidence(data) {
 
 function renderTrace(data) {
   const trace = Array.isArray(data.sponsorTrace) ? data.sponsorTrace : [];
-  $('trace-mode').textContent = data.mode === 'lab' ? 'LAB / SIMULATED' : data.programHandle === 'acronis' ? 'LIVE / ACRONIS' : 'LIVE RUN';
+  $('trace-mode').textContent = data.validation ? 'LAB / PAIRED CONTROL' : data.mode === 'lab' ? 'LAB / SIMULATED' : data.programHandle === 'acronis' ? 'LIVE / ACRONIS' : 'LIVE RUN';
   $('trace-empty').hidden = trace.length > 0;
   $('sponsor-trace').hidden = trace.length === 0;
   const list = $('sponsor-trace');
@@ -383,7 +428,7 @@ function renderTrace(data) {
 function renderReport(data) {
   const draft = data.reportDraft;
   const acronis = data.programHandle === 'acronis' || state.intake?.program?.handle === 'acronis';
-  const hasDraft = draft && typeof draft === 'object';
+  const hasDraft = !data.validation && draft && typeof draft === 'object';
   $('report-fields').hidden = !hasDraft;
   $('draft-title').value = hasDraft ? draft.title || '' : '';
   $('draft-information').value = hasDraft ? draft.vulnerability_information || '' : '';
@@ -395,12 +440,15 @@ function renderReport(data) {
   $('validation-note-block').hidden = $('validation-label').hidden;
   $('report-guidance').textContent = acronis
     ? 'No report was generated. One read-only search-marker response cannot establish a vulnerability from ordinary reflection.'
+    : data.validation
+    ? 'This is a controlled training result, not a HackerOne finding. No bounty report is available from this run.'
     : data.mode === 'lab'
     ? 'Synthetic draft for interface testing only. It cannot be sent to HackerOne.'
     : data.verdict === 'candidate'
       ? 'Review every claim against raw evidence. Verify real impact and attach an unedited screenshot or video directly in HackerOne before submitting.'
       : 'This run does not establish a reportable finding.';
   $('submit-note').textContent = acronis ? 'Reflection alone is not a vulnerability; there is nothing to submit.'
+    : data.validation ? 'Controlled training results cannot be submitted to HackerOne.'
     : data.mode === 'lab' ? 'A lab run can never be submitted.'
     : data.verdict !== 'candidate' ? 'Only a validated live candidate can be submitted.'
       : 'ProofRun cannot attach Vercel’s required PoC media through the direct report API. Use the reviewed draft and submit with media in HackerOne.';
@@ -422,6 +470,8 @@ function updateCopyButton() {
 function resetRunDisplay() {
   $('evidence-empty').hidden = false;
   $('evidence-results').hidden = true;
+  $('validation-results').hidden = true;
+  $('evidence-list').hidden = false;
   $('review-note').hidden = true;
   $('query-latency').hidden = true;
   $('trace-empty').hidden = false;
@@ -505,13 +555,21 @@ async function loadSample() {
   try {
     const data = await request('/api/intake', { method: 'POST', body: JSON.stringify({ url: $('program-url').value.trim(), sampleLab: true }) });
     renderIntake(data);
-    setMessage('Local sample loaded. This synthetic scenario is for the lab walkthrough only.');
+    setMessage('Controlled training case loaded. It compares exposed and protected local paths; no HackerOne target will be tested.');
   } catch (error) {
     $('program-details').hidden = true;
     setMessage(error.message, true);
   } finally {
     setBusy(false, button, 'Loading sample…');
   }
+}
+
+async function openTraining() {
+  if (state.busy) return;
+  $('program-url').value = 'https://hackerone.com/vercel';
+  $('program-url').dispatchEvent(new Event('input', { bubbles: true }));
+  await loadSample();
+  if (state.intake?.labOnly) $('run-title').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 async function runCheck() {
@@ -529,7 +587,9 @@ async function runCheck() {
       ? Number(data.evidence?.[0]?.status) > 0
         ? 'Acronis read-only probe completed. One search response was recorded; no vulnerability or report is claimed.'
         : 'Acronis read-only probe attempted. No target response was recorded; no vulnerability or report is claimed.'
-      : data.mode === 'lab' ? 'Local lab run completed with synthetic evidence.' : 'Live check completed. Inspect the recorded evidence before taking any action.');
+      : data.validation?.passed === true ? 'Controlled training check confirmed the authorization difference. This is not a HackerOne finding.'
+        : data.validation ? 'Controlled training check completed, but the paired control did not confirm the expected difference.'
+          : data.mode === 'lab' ? 'Local lab run completed with synthetic evidence.' : 'Live check completed. Inspect the recorded evidence before taking any action.');
     $('evidence-title').scrollIntoView({ behavior: 'smooth', block: 'start' });
   } catch (error) {
     setMessage(error.message, true);
@@ -583,6 +643,7 @@ document.querySelectorAll('.program-preset').forEach((button) => button.addEvent
 }));
 $('watch-form').addEventListener('submit', watchPolicy);
 $('sample-button').addEventListener('click', loadSample);
+$('lab-shortcut').addEventListener('click', openTraining);
 $('run-button').addEventListener('click', runCheck);
 $('copy-button').addEventListener('click', copyReport);
 $('human-validated').addEventListener('change', updateCopyButton);

@@ -4,7 +4,8 @@ import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
 import { sponsorStatus, contextFromSenso, planWithAkash, planWatchWithAkash, planAcronisWithAkash, explainWithAkash, explainWatchWithAkash, explainAcronisWithAkash, prepareClickHouse, prepareAcronisClickHouse, recordWithClickHouse, recordAcronisWithClickHouse, compareWatchWithClickHouse, storeWatchWithClickHouse, runOnGuild, notifyGuild } from './sponsors.mjs';
-import { parseProgramUrl, captureIsUsable, fetchProgramScope, fetchProgramScopeSnapshot, fetchAcronisScope, probeProject, probeAcronisSearch, draftReport, validateSubmission, submitToHackerOne } from './core.mjs';
+import { parseProgramUrl, captureIsUsable, fetchProgramScope, fetchProgramScopeSnapshot, fetchAcronisScope, probeProject, probeTrainingCase, probeAcronisSearch, draftReport, validateSubmission, submitToHackerOne } from './core.mjs';
+import { createTrainingCase, disposeTrainingCase, handleTrainingRequest } from './training-target.mjs';
 
 const root = new URL('../', import.meta.url);
 const envPath = fileURLToPath(new URL('.env', root));
@@ -89,16 +90,16 @@ async function handleIntake(body) {
   if (body.sampleLab === true) {
     intake = { programUrl, browserReady: false, scope: null, labOnly: true, createdAt: Date.now() };
     return {
-      program: { handle: 'vercel', name: 'Vercel scenario (local simulation)' },
+      program: { handle: 'vercel', name: 'Owned authorization training target' },
       policy: {
         asset: 'Local training service only',
         rules: [
-          'This sample is synthetic and does not represent current HackerOne or Vercel policy.',
-          'The lab check reads only the local training project.',
-          'Lab observations are never reportable as a Vercel vulnerability.',
+          'Two isolated local identities test a server-held private value.',
+          'The exposed case must reveal the value to the other identity; the protected case must deny it.',
+          'This controlled validation is not a HackerOne or Vercel finding.',
         ],
       },
-      scope: ['Local fixture: prj_proofrun_lab'],
+      scope: ['Owned loopback training target; exposed and protected cases'],
       source: 'local_sample',
       labOnly: true,
       limitations: ['Live mode requires a fresh signed-in browser capture and HackerOne API scope.', 'This sample can run only against the local lab.'],
@@ -214,22 +215,48 @@ async function executeRun(body) {
   if (plan.check !== 'project_access') throw new Error('AkashML did not select the approved project-access check.');
 
   await prepareClickHouse();
-  const checks = await probeProject(mode, port);
-  const analysis = await recordWithClickHouse({ id, programHandle: 'vercel', mode, checks });
-  sponsorTrace.push({ tool: 'ClickHouse', status: 'queried', detail: `${analysis.recorded} normalized observations; verdict ${analysis.verdict}; query ${analysis.queryLatencyMs} ms` });
-  const reviewNote = await explainWithAkash({ verdict: analysis.verdict, checks });
+  let checks;
+  let analysis;
+  let validation = null;
+  if (mode === 'lab') {
+    const exposed = createTrainingCase('exposed');
+    const patched = createTrainingCase('patched');
+    try {
+      const exposedChecks = await probeTrainingCase(exposed, port);
+      const patchedChecks = await probeTrainingCase(patched, port);
+      const exposedAnalysis = await recordWithClickHouse({ id, programHandle: 'vercel', mode, checks: exposedChecks });
+      const patchedAnalysis = await recordWithClickHouse({ id: randomUUID(), programHandle: 'vercel', mode, checks: patchedChecks });
+      checks = exposedChecks;
+      analysis = exposedAnalysis;
+      validation = {
+        exposed: { verdict: exposedAnalysis.verdict, evidence: exposedChecks },
+        patched: { verdict: patchedAnalysis.verdict, evidence: patchedChecks },
+        passed: exposedAnalysis.verdict === 'candidate' && patchedAnalysis.verdict === 'expected',
+      };
+      sponsorTrace.push({ tool: 'ClickHouse', status: 'queried', detail: `Exposed ${exposedAnalysis.verdict}; protected ${patchedAnalysis.verdict}; ${exposedAnalysis.recorded + patchedAnalysis.recorded} normalized observations.` });
+    } finally {
+      disposeTrainingCase(exposed.id);
+      disposeTrainingCase(patched.id);
+    }
+  } else {
+    checks = await probeProject(mode, port);
+    analysis = await recordWithClickHouse({ id, programHandle: 'vercel', mode, checks });
+    sponsorTrace.push({ tool: 'ClickHouse', status: 'queried', detail: `${analysis.recorded} normalized observations; verdict ${analysis.verdict}; query ${analysis.queryLatencyMs} ms` });
+  }
+  const verdict = validation && !validation.passed ? 'inconclusive' : analysis.verdict;
+  const reviewNote = await explainWithAkash({ verdict, checks });
   sponsorTrace.push({ tool: 'AkashML', status: 'explained', detail: 'Produced bounded questions for human review.' });
-  await notifyGuild({ id, programHandle: 'vercel', verdict: analysis.verdict });
+  await notifyGuild({ id, programHandle: 'vercel', verdict });
   sponsorTrace.push({ tool: 'Guild', status: 'acknowledged', detail: 'Completed run recorded by the agent.' });
 
-  const reportDraft = draftReport({ mode, verdict: analysis.verdict, checks });
+  const reportDraft = mode === 'lab' ? null : draftReport({ mode, verdict, checks });
   const run = {
-    id, mode, verdict: analysis.verdict, evidence: checks, sponsorTrace, reportDraft, reviewNote, queryLatencyMs: analysis.queryLatencyMs,
+    id, mode, verdict, evidence: checks, validation, sponsorTrace, reportDraft, reviewNote, queryLatencyMs: analysis.queryLatencyMs,
     submissionEligible: false, // Vercel requires in-report media; direct HackerOne API upload is unverified.
     scopeId: intake.scope?.id, submitted: false,
   };
   runs.set(id, run);
-  return { id, mode, verdict: run.verdict, evidence: checks, sponsorTrace, reportDraft, reviewNote, queryLatencyMs: run.queryLatencyMs, submissionEligible: run.submissionEligible };
+  return { id, mode, verdict: run.verdict, evidence: checks, validation, sponsorTrace, reportDraft, reviewNote, queryLatencyMs: run.queryLatencyMs, submissionEligible: run.submissionEligible };
 }
 
 async function handleRun(body) {
@@ -318,9 +345,7 @@ const server = http.createServer(async (request, response) => {
     if (request.method === 'POST' && path === '/api/watch') return json(response, 200, await handleWatch(await readJson(request)));
     if (request.method === 'POST' && path === '/api/run') return json(response, 200, await handleRun(await readJson(request)));
     if (request.method === 'POST' && path === '/api/submit') return json(response, 200, await handleSubmit(await readJson(request)));
-    if (request.method === 'GET' && path === '/lab/v9/projects/prj_proofrun_lab') {
-      return json(response, 200, { id: 'prj_proofrun_lab', name: 'proofrun-local-lab', lab: true });
-    }
+    if (request.method === 'GET' && handleTrainingRequest(request, response, path)) return;
     if (request.method === 'GET' && staticFiles[path]) {
       const [filename, type] = staticFiles[path];
       const file = await readFile(new URL(`../public/${filename}`, import.meta.url));
