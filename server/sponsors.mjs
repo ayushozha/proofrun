@@ -151,7 +151,7 @@ async function clickhouse(sql, data) {
     method: 'POST',
     headers: { Authorization: `Basic ${auth}`, 'Content-Type': 'text/plain; charset=utf-8' },
     body: data || sql,
-  }, 'ClickHouse');
+  }, 'ClickHouse', 60000);
   return response.text();
 }
 
