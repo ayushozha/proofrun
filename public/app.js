@@ -28,6 +28,8 @@ function setBusy(busy, button, activeLabel) {
   button.disabled = busy;
   button.textContent = busy ? activeLabel : button.dataset.label;
   $('intake-button').disabled = busy;
+  $('sample-button').disabled = busy;
+  $('watch-button').disabled = busy;
   updateRunButton();
   updateCopyButton();
 }
@@ -46,12 +48,25 @@ function renderStatus(data) {
   const sponsors = data.sponsors || {};
   const list = $('sponsor-statuses');
   list.replaceChildren();
-  for (const [key, label] of [['guild', 'Guild'], ['akash', 'AkashML'], ['clickhouse', 'ClickHouse'], ['senso', 'Senso']]) {
+  for (const [key, label, role] of [
+    ['guild', 'Guild', 'Policy gate'],
+    ['akash', 'AkashML', 'Check planning & review'],
+    ['clickhouse', 'ClickHouse', 'Evidence analysis'],
+    ['senso', 'Senso', 'Pinned policy context'],
+  ]) {
     const ready = connected(sponsors[key]);
     const row = document.createElement('li');
     row.className = ready ? 'is-ready' : 'is-missing';
     const name = document.createElement('span');
-    name.textContent = label;
+    name.className = 'sponsor-name';
+    const words = document.createElement('span');
+    words.className = 'sponsor-label';
+    const title = document.createElement('strong');
+    title.textContent = label;
+    const description = document.createElement('small');
+    description.textContent = role;
+    words.append(title, description);
+    name.append(words);
     const status = document.createElement('span');
     status.className = 'status-text';
     status.textContent = ready ? 'Configured' : 'Not configured';
@@ -61,8 +76,9 @@ function renderStatus(data) {
   $('hackerone-status').textContent = data.hackerone?.apiConfigured ? 'Configured' : 'Not configured';
   $('vercel-status').textContent = data.vercel?.configured ? 'Configured' : 'Not configured';
   $('identity-status').textContent = data.hackerone?.idVerified === true ? 'Verified' : data.hackerone?.idVerified === false ? 'Not verified' : 'Not checked';
-  $('capture-state').textContent = data.captureReady ? 'Capture received' : 'Waiting for capture';
-  $('capture-state').classList.toggle('is-ready', Boolean(data.captureReady));
+  const captured = state.intake?.source === 'browser' || Boolean(data.captureReady);
+  $('capture-state').textContent = state.intake?.labOnly ? 'Local sample loaded' : captured ? 'Capture received' : 'Waiting for capture';
+  $('capture-state').classList.toggle('is-ready', captured || Boolean(state.intake?.labOnly));
   updateModeNote();
 }
 
@@ -78,12 +94,15 @@ function listText(element, items) {
 function renderIntake(data) {
   state.intake = data;
   state.run = null;
-  $('capture-state').textContent = 'Capture received';
-  $('capture-state').classList.add('is-ready');
+  $('capture-state').textContent = data.labOnly ? 'Local sample loaded' : data.source === 'browser' ? 'Capture received' : 'Waiting for capture';
+  $('capture-state').classList.toggle('is-ready', Boolean(data.labOnly || data.source === 'browser'));
   resetRunDisplay();
   $('program-details').hidden = false;
   $('program-name').textContent = data.program?.name || data.program?.handle || 'Program';
-  $('program-source').textContent = data.source === 'browser' ? 'BROWSER CAPTURE' : data.source === 'hackerone_api' ? 'HACKERONE API' : String(data.source || 'SOURCE UNAVAILABLE').toUpperCase();
+  $('program-source').textContent = data.source === 'browser' ? 'BROWSER CAPTURE' : data.source === 'hackerone_api' ? 'HACKERONE API' : data.source === 'local_sample' ? 'LOCAL SAMPLE · SYNTHETIC' : String(data.source || 'SOURCE UNAVAILABLE').toUpperCase();
+  $('source-program-title').textContent = data.labOnly ? 'Local fixture' : 'HackerOne';
+  $('source-program').classList.toggle('is-ready', !data.labOnly);
+  $('source-program-detail').textContent = data.labOnly ? 'Synthetic local fixture. It is not current HackerOne scope.' : data.source === 'browser' ? 'Signed-in browser capture received; structured scope is checked separately.' : 'Structured API scope received without signed-in browser capture.';
   $('program-asset').textContent = data.policy?.asset || 'No asset specified in captured policy';
   listText($('program-rules'), Array.isArray(data.policy?.rules) ? data.policy.rules : []);
   const scopes = $('scope-list');
@@ -97,7 +116,8 @@ function renderIntake(data) {
   const limitations = Array.isArray(data.limitations) ? data.limitations : [];
   $('limitations-block').hidden = limitations.length === 0;
   listText($('limitations-list'), limitations);
-  updateRunButton();
+  if (data.labOnly) $('mode-lab').checked = true;
+  updateModeNote();
 }
 
 function selectedMode() {
@@ -107,20 +127,27 @@ function selectedMode() {
 function updateModeNote() {
   const mode = selectedMode();
   const readiness = state.status;
-  if (mode === 'lab') {
-    $('mode-note').textContent = 'Lab mode is a workflow demonstration, not a bounty finding.';
-  } else if (!readiness?.vercel?.configured) {
-    $('mode-note').textContent = 'Live mode needs two researcher-owned Vercel accounts configured on the server.';
-  } else if (!['guild', 'akash', 'clickhouse', 'senso'].every((key) => connected(readiness.sponsors?.[key]))) {
-    $('mode-note').textContent = 'Live mode needs Guild, AkashML, ClickHouse, and Senso configured.';
-  } else {
-    $('mode-note').textContent = 'Live checks use only the captured program scope and researcher-owned accounts.';
-  }
+  const missing = [['guild', 'Guild'], ['akash', 'AkashML'], ['clickhouse', 'ClickHouse'], ['senso', 'Senso']]
+    .filter(([key]) => !connected(readiness?.sponsors?.[key])).map(([, label]) => label);
+  let note;
+  if (!state.intake) note = 'Capture the signed-in program, or load the local sample for a lab walkthrough.';
+  else if (mode === 'live' && state.intake.labOnly) note = `The local sample cannot authorize live testing. Capture the signed-in program.${missing.length ? ` Also configure ${missing.join(', ')} in the local .env.` : ''}`;
+  else if (missing.length) note = `Configure ${missing.join(', ')} in the local .env before running.`;
+  else if (mode === 'lab') note = 'Lab mode produces synthetic evidence. It cannot establish a bounty finding.';
+  else if (state.intake.source !== 'browser' || !readiness?.captureReady) note = 'Live mode requires a current signed-in browser capture.';
+  else if (!readiness?.hackerone?.apiConfigured || state.intake.limitations?.some((item) => /live mode is blocked/i.test(item))) note = 'Live mode also needs HackerOne structured scope and confirmed policy checks.';
+  else if (!readiness?.vercel?.configured) note = 'Live mode needs two distinct researcher-owned Vercel accounts registered with your HackerOne email aliases, both tokens, and a project ID.';
+  else note = 'Ready for one bounded check inside current scope and researcher-owned accounts.';
+  $('mode-note').textContent = note;
   updateRunButton();
 }
 
 function updateRunButton() {
-  $('run-button').disabled = state.busy || !state.intake;
+  const sponsorsReady = ['guild', 'akash', 'clickhouse', 'senso'].every((key) => connected(state.status?.sponsors?.[key]));
+  const liveReady = state.intake && !state.intake.labOnly && state.intake.source === 'browser' && state.status?.captureReady &&
+    state.status?.hackerone?.apiConfigured && state.status?.vercel?.configured &&
+    !state.intake.limitations?.some((item) => /live mode is blocked/i.test(item));
+  $('run-button').disabled = state.busy || !state.intake || !sponsorsReady || (selectedMode() === 'live' && !liveReady);
 }
 
 function createElement(tag, className, text) {
@@ -130,11 +157,69 @@ function createElement(tag, className, text) {
   return element;
 }
 
+function renderWatch(data) {
+  $('watch-result').hidden = false;
+  const status = ['baseline', 'changed', 'unchanged'].includes(data.status) ? data.status : 'baseline';
+  const labels = { baseline: 'BASELINE RECORDED', changed: 'SCOPE CHANGED', unchanged: 'NO CHANGE' };
+  $('watch-status').dataset.status = status;
+  $('watch-status').textContent = labels[status];
+  const headings = { baseline: 'Structured scope baseline saved', changed: 'Structured scope entries changed', unchanged: 'Structured scope unchanged' };
+  const heading = $('watch-summary');
+  heading.textContent = headings[status];
+  let summary = $('watch-summary-detail');
+  if (!summary) {
+    summary = createElement('p', 'watch-summary-detail');
+    summary.id = 'watch-summary-detail';
+    heading.after(summary);
+  }
+  const attribution = ` Source: ${data.source?.url} (fetched ${data.source?.fetchedAt}). No target was tested.`;
+  const explanation = data.summary?.endsWith(attribution) ? data.summary.slice(0, -attribution.length) : data.summary;
+  summary.textContent = explanation || 'Current HackerOne structured scope was observed.';
+  const count = data.scopeCount;
+  $('watch-count').textContent = Number.isFinite(count) ? `${count} scope entr${count === 1 ? 'y' : 'ies'}` : 'Scope count unavailable';
+  const sourceLink = $('watch-source');
+  try {
+    const source = new URL(data.source?.url);
+    if (source.protocol !== 'https:' || source.hostname !== 'hackerone.com') throw new Error('Unexpected source');
+    sourceLink.href = source.href;
+    sourceLink.textContent = source.hostname + source.pathname;
+  } catch {
+    sourceLink.removeAttribute('href');
+    sourceLink.textContent = 'Source unavailable';
+  }
+  const fetched = new Date(data.source?.fetchedAt);
+  $('watch-fetched').textContent = Number.isNaN(fetched.getTime()) ? 'Fetch time unavailable' : `Fetched ${fetched.toLocaleString()}`;
+  const latency = data.queryLatencyMs;
+  $('watch-latency').hidden = !Number.isFinite(latency) || latency < 0;
+  if (!$('watch-latency').hidden) $('watch-latency').textContent = `ClickHouse ${Math.round(latency * 10) / 10} ms`;
+  $('watch-added-title').textContent = status === 'baseline' ? 'Baseline scope entries' : 'Added scope entries';
+  for (const [id, items] of [['watch-added', data.added], ['watch-removed', data.removed]]) {
+    const list = $(id);
+    list.replaceChildren();
+    for (const item of Array.isArray(items) ? items : []) list.append(createElement('li', '', item));
+    if (!list.children.length) list.append(createElement('li', 'is-empty', status === 'baseline' && id === 'watch-added' ? 'Baseline stored; no prior structured scope to compare.' : 'None observed.'));
+  }
+  const trace = $('watch-sponsor-trace');
+  trace.replaceChildren();
+  for (const call of Array.isArray(data.sponsorTrace) ? data.sponsorTrace : []) {
+    const row = createElement('li', /fail|error/i.test(call.status || '') ? 'is-failed' : '');
+    const title = createElement('strong', '', call.tool || 'Tool');
+    title.append(createElement('code', '', call.status || 'recorded'));
+    row.append(title, createElement('p', '', call.detail || 'No detail recorded.'));
+    trace.append(row);
+  }
+  if (!trace.children.length) trace.append(createElement('li', '', 'No sponsor calls recorded.'));
+}
+
 function renderEvidence(data) {
   $('evidence-empty').hidden = true;
   $('evidence-results').hidden = false;
+  $('source-evidence').classList.add('is-ready');
+  $('source-evidence-detail').textContent = data.mode === 'lab' ? 'Synthetic observations from the local fixture; no bounty claim.' : 'Bounded observations from researcher-owned accounts; inspect raw evidence.';
   const verdicts = { candidate: 'Candidate finding — human validation required', expected: 'Expected boundary held', inconclusive: 'Inconclusive evidence' };
-  $('result-verdict').textContent = verdicts[data.verdict] || `Result: ${data.verdict || 'unknown'}`;
+  $('result-verdict').textContent = data.mode === 'lab' && data.verdict === 'candidate'
+    ? 'Simulated candidate — local lab only'
+    : verdicts[data.verdict] || `Result: ${data.verdict || 'unknown'}`;
   $('result-mode').textContent = data.mode === 'live' ? 'LIVE CHECK' : 'LOCAL LAB · SYNTHETIC';
   const latency = data.queryLatencyMs;
   $('query-latency').hidden = !Number.isFinite(latency) || latency < 0;
@@ -186,6 +271,9 @@ function renderTrace(data) {
     row.append(title, createElement('p', '', call.detail || 'No detail recorded.'));
     list.append(row);
   }
+  const senso = trace.find((call) => call.tool === 'Senso' && call.status === 'retrieved');
+  $('source-policy').classList.toggle('is-ready', Boolean(senso));
+  $('source-policy-detail').textContent = senso ? senso.detail : 'A pinned ProofRun policy is retrieved when a run begins.';
 }
 
 function renderReport(data) {
@@ -237,6 +325,10 @@ function resetRunDisplay() {
   $('report-guidance').textContent = 'Run a check to generate a draft. A human must verify a real finding before submission.';
   $('submit-note').textContent = 'A lab run can never be submitted.';
   $('copy-result').hidden = true;
+  $('source-policy').classList.remove('is-ready');
+  $('source-policy-detail').textContent = 'A pinned ProofRun policy is retrieved when a run begins.';
+  $('source-evidence').classList.remove('is-ready');
+  $('source-evidence-detail').textContent = 'No observations recorded yet.';
   updateCopyButton();
 }
 
@@ -250,7 +342,10 @@ async function capture(event) {
   try {
     const data = await request('/api/intake', { method: 'POST', body: JSON.stringify({ url: $('program-url').value.trim() }) });
     renderIntake(data);
-    setMessage(`Captured ${data.program?.name || 'program'} policy. Review the scope before running a check.`);
+    setMessage(data.source === 'browser'
+      ? `Captured ${data.program?.name || 'program'} policy from the signed-in browser. Review the scope before running a check.`
+      : `Loaded ${data.program?.name || 'program'} scope from HackerOne API. Browser capture is still required for a live check.`);
+    request('/api/status').then(renderStatus).catch(() => {});
   } catch (error) {
     $('program-details').hidden = true;
     setMessage(error.message, true);
@@ -259,9 +354,45 @@ async function capture(event) {
   }
 }
 
+async function watchPolicy(event) {
+  event.preventDefault();
+  setMessage('Fetching live HackerOne scope. Sponsor review may take a few minutes; keep this page open.');
+  $('watch-result').hidden = true;
+  const button = $('watch-button');
+  setBusy(true, button, 'Watching…');
+  try {
+    const data = await request('/api/watch', { method: 'POST', body: JSON.stringify({ url: $('watch-url').value.trim() }) });
+    renderWatch(data);
+    setMessage(data.status === 'changed' ? 'Structured scope change recorded. Review the delta and source before acting.' : 'Structured scope observation recorded. No target was probed.');
+    $('watch-result').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  } catch (error) {
+    setMessage(error.message, true);
+  } finally {
+    setBusy(false, button, 'Watching…');
+  }
+}
+
+async function loadSample() {
+  setMessage('');
+  state.intake = null;
+  updateRunButton();
+  const button = $('sample-button');
+  setBusy(true, button, 'Loading sample…');
+  try {
+    const data = await request('/api/intake', { method: 'POST', body: JSON.stringify({ url: $('program-url').value.trim(), sampleLab: true }) });
+    renderIntake(data);
+    setMessage('Local sample loaded. This synthetic scenario is for the lab walkthrough only.');
+  } catch (error) {
+    $('program-details').hidden = true;
+    setMessage(error.message, true);
+  } finally {
+    setBusy(false, button, 'Loading sample…');
+  }
+}
+
 async function runCheck() {
   if (!state.intake) return;
-  setMessage('');
+  setMessage('Running sponsor checks. The Guild policy gate may take a few minutes; keep this page open.');
   const button = $('run-button');
   setBusy(true, button, 'Running…');
   try {
@@ -306,9 +437,13 @@ async function copyReport() {
 }
 
 $('intake-button').dataset.label = $('intake-button').textContent;
+$('sample-button').dataset.label = $('sample-button').textContent;
+$('watch-button').dataset.label = $('watch-button').textContent;
 $('run-button').dataset.label = $('run-button').textContent;
 $('copy-button').dataset.label = $('copy-button').textContent;
 $('intake-form').addEventListener('submit', capture);
+$('watch-form').addEventListener('submit', watchPolicy);
+$('sample-button').addEventListener('click', loadSample);
 $('run-button').addEventListener('click', runCheck);
 $('copy-button').addEventListener('click', copyReport);
 $('human-validated').addEventListener('change', updateCopyButton);

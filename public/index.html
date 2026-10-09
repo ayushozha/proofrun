@@ -1,219 +1,127 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="theme-color" content="#0b1115" />
-    <title>ProofRun — Bounty verification workbench</title>
-    <link rel="stylesheet" href="/styles.css" />
-    <script src="/app.js" defer></script>
-  </head>
-  <body>
-    <a class="skip-link" href="#main">Skip to workbench</a>
-    <div class="app-shell">
-      <header class="site-header">
-        <div class="brand" aria-label="ProofRun">
-          <span class="brand-mark" aria-hidden="true"><span></span></span>
-          <span class="brand-name">ProofRun<span class="brand-period">.</span></span>
-        </div>
-        <div class="header-end">
-          <span class="header-caption">BOUNTY VERIFICATION WORKBENCH</span>
-          <span id="connection-state" class="connection-pill">Checking local service</span>
-        </div>
-      </header>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f7f8f6">
+  <title>ProofRun — Bounty verification workbench</title>
+  <link rel="stylesheet" href="/styles.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to workbench</a>
+  <div class="app-shell">
+    <header class="site-header">
+      <a class="brand" href="#main" aria-label="ProofRun home">ProofRun<span class="brand-period">.</span></a>
+      <div class="header-end">
+        <span class="header-caption">BOUNTY VERIFICATION WORKBENCH</span>
+        <span id="connection-state" class="connection-pill">Checking local service</span>
+      </div>
+    </header>
 
-      <main id="main">
+    <div id="global-message" class="message" role="status" aria-live="polite" hidden></div>
+
+    <div class="workspace-grid">
+      <main id="main" class="main-column">
         <section class="intro" aria-labelledby="page-title">
-          <div>
-            <p class="eyebrow"><span class="eyebrow-line"></span> A controlled path from policy to proof</p>
-            <h1 id="page-title">A finding needs<br /><em>evidence.</em></h1>
-            <p class="intro-copy">Capture a signed-in bounty program page, run a bounded check against its rules, and prepare a report for your review.</p>
-          </div>
-          <div class="intro-aside" aria-label="Workflow steps">
-            <span>01 <b>Capture scope</b></span>
-            <span>02 <b>Run bounded check</b></span>
-            <span>03 <b>Inspect evidence</b></span>
-            <span>04 <b>Validate & hand off</b></span>
+          <h1 id="page-title">Know the scope before you act<span>.</span></h1>
+          <p class="intro-copy">Watch structured scope changes. Preserve the source. Keep every security check inside the boundary.</p>
+        </section>
+
+        <section class="watch-panel" aria-labelledby="watch-title">
+          <div class="watch-heading"><div><p class="micro-label">LIVE WEB MONITOR / HACKERONE</p><h2 id="watch-title">Watch structured scope</h2><p>Compare asset identifiers and submission/bounty eligibility from HackerOne’s structured scope. Free-text program rules are outside this watch.</p></div><span class="watch-mark" aria-hidden="true">↗</span></div>
+          <form id="watch-form" class="watch-form"><div class="watch-field"><label for="watch-url">Program URL</label><input id="watch-url" name="url" type="url" value="https://hackerone.com/vercel" required spellcheck="false" autocomplete="url" placeholder="https://hackerone.com/program"></div><button id="watch-button" class="button button-primary" type="submit">Watch HackerOne scope <span aria-hidden="true">→</span></button></form>
+          <div id="watch-result" class="watch-result" aria-live="polite" hidden>
+            <div class="watch-result-header"><div><span id="watch-status" class="watch-status"></span><h3 id="watch-summary"></h3></div><span id="watch-count" class="watch-count"></span></div>
+            <div class="watch-meta"><span>Source <a id="watch-source" href="https://hackerone.com/vercel" target="_blank" rel="noopener noreferrer">HackerOne program</a></span><span id="watch-fetched"></span><span id="watch-latency" hidden></span></div>
+            <div class="watch-diff"><div><h4 id="watch-added-title">Added scope entries</h4><ul id="watch-added"></ul></div><div><h4>Removed scope entries</h4><ul id="watch-removed"></ul></div></div>
+            <div class="watch-trace"><p class="micro-label">SPONSOR TRACE</p><ol id="watch-sponsor-trace"></ol></div>
+            <p class="watch-disclaimer">Structured-scope monitoring is a live web action. A scope change is not a vulnerability finding.</p>
           </div>
         </section>
 
-        <div id="global-message" class="message" role="status" aria-live="polite" hidden></div>
-
-        <div class="workspace-grid">
-          <div class="main-column">
-            <section class="panel intake-panel" aria-labelledby="intake-title">
-              <div class="panel-heading">
-                <span class="step-number">01</span>
-                <div>
-                  <p class="section-kicker">PROGRAM INTAKE</p>
-                  <h2 id="intake-title">Start with the rules</h2>
-                </div>
-              </div>
-              <div class="setup-block">
-                <p class="micro-label">BROWSER SETUP <span id="capture-state" class="capture-state">Waiting for capture</span></p>
-                <ol>
-                  <li>Run <code>npm start</code> in this project, then open <code>http://127.0.0.1:8787</code>.</li>
-                  <li>In Edge or Chrome extensions, enable Developer mode and load <code>extension/</code> unpacked.</li>
-                  <li>Sign in to HackerOne and open the <a href="https://hackerone.com/vercel" target="_blank" rel="noopener noreferrer">Vercel program page</a>.</li>
-                  <li>Click the extension icon → <strong>Capture program</strong>. Return here and capture the matching URL below.</li>
-                </ol>
-              </div>
-              <form id="intake-form" class="url-form">
+        <section class="step-section intake-panel" aria-labelledby="intake-title">
+          <div class="step-heading"><span class="step-number">1</span><div>
+            <h2 id="intake-title">Capture program scope</h2>
+            <p>Use the ProofRun extension on a signed-in HackerOne page, then enter that same program URL.</p>
+          </div></div>
+          <div class="step-body">
+            <form id="intake-form" class="intake-card">
+              <div class="url-column">
                 <label for="program-url">HackerOne program URL</label>
-                <div class="input-action">
-                  <input id="program-url" name="url" type="url" value="https://hackerone.com/vercel" required spellcheck="false" autocomplete="url" placeholder="https://hackerone.com/program" />
-                  <button id="intake-button" class="button button-primary" type="submit">Capture program <span aria-hidden="true">↗</span></button>
-                </div>
-                <p class="field-help">This URL must match the page you captured in the browser extension.</p>
-              </form>
-              <div id="program-details" class="program-details" hidden>
-                <div class="program-line">
-                  <div>
-                    <p class="micro-label">CAPTURED PROGRAM</p>
-                    <h3 id="program-name"></h3>
-                  </div>
-                  <span id="program-source" class="tag"></span>
-                </div>
-                <div class="rule-block">
-                  <p class="micro-label">TEST BOUNDARY</p>
-                  <p id="program-asset" class="asset-name"></p>
-                  <ul id="program-rules" class="rule-list"></ul>
-                  <div id="scope-list" class="scope-list"></div>
-                </div>
-                <div id="limitations-block" class="limitations-block" hidden>
-                  <p class="micro-label">LIMITATIONS</p>
-                  <ul id="limitations-list"></ul>
-                </div>
+                <input id="program-url" name="url" type="url" value="https://hackerone.com/vercel" required spellcheck="false" autocomplete="url" placeholder="https://hackerone.com/program">
+                <p class="field-help">The URL must match the page captured in your browser.</p>
               </div>
-            </section>
-
-            <section class="panel run-panel" aria-labelledby="run-title">
-              <div class="panel-heading">
-                <span class="step-number">02</span>
-                <div>
-                  <p class="section-kicker">CONTROLLED TEST</p>
-                  <h2 id="run-title">Check the boundary</h2>
-                </div>
+              <div class="capture-column">
+                <div class="capture-heading"><span>Browser extension</span><span id="capture-state" class="capture-state">Waiting for capture</span></div>
+                <p>Open the program in your signed-in browser, capture it with the extension, then continue here.</p>
+                <button id="intake-button" class="button button-primary" type="submit">Capture program <span aria-hidden="true">↗</span></button>
               </div>
-              <fieldset class="mode-selector">
-                <legend>Run mode</legend>
-                <label class="mode-card" for="mode-lab">
-                  <input id="mode-lab" type="radio" name="run-mode" value="lab" checked />
-                  <span class="mode-text"><strong>Local lab</strong><small>Deterministic sample evidence. Never submitted.</small></span>
-                  <span class="mode-indicator" aria-hidden="true"></span>
-                </label>
-                <label class="mode-card" for="mode-live">
-                  <input id="mode-live" type="radio" name="run-mode" value="live" />
-                  <span class="mode-text"><strong>Live authorized check</strong><small>Only researcher-owned Vercel accounts.</small></span>
-                  <span class="mode-indicator" aria-hidden="true"></span>
-                </label>
-              </fieldset>
-              <div class="run-footer">
-                <div id="mode-note" class="mode-note">Lab mode is a workflow demonstration, not a bounty finding.</div>
-                <button id="run-button" class="button button-primary" type="button" disabled>Run bounded check <span aria-hidden="true">→</span></button>
-              </div>
-            </section>
-
-            <section class="panel evidence-panel" aria-labelledby="evidence-title">
-              <div class="panel-heading">
-                <span class="step-number">03</span>
-                <div>
-                  <p class="section-kicker">OBSERVED OUTCOME</p>
-                  <h2 id="evidence-title">Evidence timeline</h2>
-                </div>
-              </div>
-              <div id="evidence-empty" class="empty-state">
-                <span class="empty-glyph" aria-hidden="true">∷</span>
-                <p>No check has run yet.</p>
-                <small>The owner, other account, and anonymous outcomes will appear here.</small>
-              </div>
-              <div id="evidence-results" hidden>
-                <div class="result-heading">
-                  <div>
-                    <p class="micro-label">RESULT</p>
-                    <strong id="result-verdict"></strong>
-                  </div>
-                  <div class="result-flags">
-                    <span id="query-latency" class="tag" hidden></span>
-                    <span id="result-mode" class="tag"></span>
-                  </div>
-                </div>
-                <p id="result-explanation" class="result-explanation"></p>
-                <ol id="evidence-list" class="evidence-list"></ol>
-                <div id="review-note" class="review-note" hidden>
-                  <p class="micro-label">AKASHML REVIEW · UNVERIFIED</p>
-                  <p id="review-summary"></p>
-                  <ol id="review-questions" aria-label="Questions to validate"></ol>
-                </div>
-              </div>
-            </section>
+            </form>
+            <div class="intake-help">
+              <details class="setup-details"><summary>How browser capture works</summary><ol>
+                <li>Run <code>npm start</code> and open this local workbench.</li>
+                <li>In Edge or Chrome, load the project’s <code>extension/</code> folder as an unpacked extension.</li>
+                <li>Sign in to HackerOne and open the <a href="https://hackerone.com/vercel" target="_blank" rel="noopener noreferrer">Vercel program</a>.</li>
+                <li>Use the extension’s <strong>Capture program</strong> action. Return here and capture the matching URL.</li>
+              </ol></details>
+              <button id="sample-button" class="text-button" type="button">Use local sample for a lab walkthrough <span aria-hidden="true">→</span></button>
+            </div>
+            <div id="program-details" class="program-details" hidden>
+              <div class="program-line"><div><p class="micro-label">CAPTURED PROGRAM</p><h3 id="program-name"></h3></div><span id="program-source" class="tag"></span></div>
+              <div class="rule-block"><p class="micro-label">TEST BOUNDARY</p><p id="program-asset" class="asset-name"></p><ul id="program-rules" class="rule-list"></ul><div id="scope-list" class="scope-list"></div></div>
+              <div id="limitations-block" class="limitations-block" hidden><p class="micro-label">LIMITATIONS</p><ul id="limitations-list"></ul></div>
+            </div>
           </div>
+        </section>
 
-          <aside class="side-column" aria-label="Integrations and report">
-            <section class="panel integration-panel" aria-labelledby="integrations-title">
-              <div class="side-heading">
-                <p class="section-kicker">RUNTIME DEPENDENCIES</p>
-                <h2 id="integrations-title">Sponsor tools</h2>
-              </div>
-              <p class="side-intro">Connection status is checked locally. A run trace appears only when calls occur.</p>
-              <ul id="sponsor-statuses" class="sponsor-statuses">
-                <li><span>Guild</span><span class="status-text">Checking</span></li>
-                <li><span>AkashML</span><span class="status-text">Checking</span></li>
-                <li><span>ClickHouse</span><span class="status-text">Checking</span></li>
-                <li><span>Senso</span><span class="status-text">Checking</span></li>
-              </ul>
-              <div class="integration-meta">
-                <span>HackerOne API <b id="hackerone-status">Checking</b></span>
-                <span>Vercel accounts <b id="vercel-status">Checking</b></span>
-                <span>ID verification <b id="identity-status">Checking</b></span>
-              </div>
-              <div class="trace-heading">
-                <p class="micro-label">THIS RUN</p>
-                <span id="trace-mode" class="trace-mode"></span>
-              </div>
-              <div id="trace-empty" class="trace-empty">No sponsor calls recorded.</div>
-              <ol id="sponsor-trace" class="sponsor-trace" hidden></ol>
-            </section>
+        <section class="step-section run-panel" aria-labelledby="run-title">
+          <div class="step-heading"><span class="step-number">2</span><div>
+            <h2 id="run-title">Choose verification mode</h2>
+            <p>Start with an isolated lab run, or use the bounded live check when every source and account is ready.</p>
+          </div></div>
+          <div class="step-body">
+            <fieldset class="mode-selector"><legend class="visually-hidden">Run mode</legend>
+              <label class="mode-card" for="mode-lab"><input id="mode-lab" type="radio" name="run-mode" value="lab" checked><span class="mode-text"><strong>Local lab</strong><small>Deterministic sample evidence. No external target traffic.</small></span><span class="mode-hint">SYNTHETIC</span></label>
+              <label class="mode-card" for="mode-live"><input id="mode-live" type="radio" name="run-mode" value="live"><span class="mode-text"><strong>Bounded live check</strong><small>Researcher-owned Vercel accounts. Current scope required.</small></span><span class="mode-hint">AUTHORIZED</span></label>
+            </fieldset>
+            <div class="run-footer"><button id="run-button" class="button button-primary" type="button" disabled>Run bounded check <span aria-hidden="true">→</span></button><p id="mode-note" class="mode-note" aria-live="polite">Capture a program to begin.</p></div>
+          </div>
+        </section>
 
-            <section class="panel report-panel" aria-labelledby="report-title">
-              <div class="side-heading">
-                <p class="section-kicker">HUMAN CHECKPOINT</p>
-                <h2 id="report-title">Report draft</h2>
-              </div>
-              <p id="report-guidance" class="side-intro">Run a check to generate a draft. A human must verify a real finding before submission.</p>
-              <div id="report-fields" class="report-fields" hidden>
-                <label for="draft-title">Title</label>
-                <input id="draft-title" type="text" maxlength="200" />
-                <label for="draft-information">Proof of concept</label>
-                <textarea id="draft-information" rows="7"></textarea>
-                <label for="draft-impact">Impact</label>
-                <textarea id="draft-impact" rows="4"></textarea>
-                <label for="draft-severity">Severity</label>
-                <select id="draft-severity" required>
-                  <option value="">Choose after reviewing impact</option>
-                  <option value="low">Low</option>
-                  <option value="medium">Medium</option>
-                  <option value="high">High</option>
-                  <option value="critical">Critical</option>
-                </select>
-              </div>
-              <label id="validation-label" class="validation-label" hidden>
-                <input id="human-validated" type="checkbox" />
-                <span>I personally reproduced this live finding and verified the scope, evidence, and report.</span>
-              </label>
-              <div id="validation-note-block" class="validation-note-block" hidden>
-                <label for="validation-note">How did you personally validate it?</label>
-                <textarea id="validation-note" rows="3" placeholder="Describe the repeat run and evidence you inspected."></textarea>
-              </div>
-              <button id="copy-button" class="button button-submit" type="button" disabled>Copy reviewed report</button>
-              <p id="submit-note" class="submit-note">A lab run can never be submitted.</p>
-              <p class="submit-note"><a href="https://hackerone.com/vercel" target="_blank" rel="noopener noreferrer">Open Vercel on HackerOne</a> to attach the required PoC media and submit a verified live finding.</p>
-              <div id="copy-result" class="submission-result" role="status" aria-live="polite" hidden></div>
-            </section>
-          </aside>
-        </div>
+        <section class="step-section evidence-panel" aria-labelledby="evidence-title">
+          <div class="step-heading"><span class="step-number">3</span><div>
+            <h2 id="evidence-title">Evidence timeline</h2>
+            <p>Review observations alongside their mode, source, and the reasoning that still needs a human check.</p>
+          </div></div>
+          <div class="step-body">
+            <div id="evidence-empty" class="empty-state"><div class="empty-glyph" aria-hidden="true"><svg viewBox="0 0 32 40" fill="none"><path d="M5 1h15l7 7v30H5zM20 1v8h7M10 17h12M10 23h12M10 29h8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div><p>No evidence yet</p><small>Run a check to see the owner, other-account, and anonymous observations here.</small></div>
+            <div id="evidence-results" hidden><div class="result-heading"><div><p class="micro-label">OBSERVED RESULT</p><strong id="result-verdict"></strong></div><div class="result-flags"><span id="query-latency" class="tag" hidden></span><span id="result-mode" class="tag"></span></div></div><p id="result-explanation" class="result-explanation"></p><ol id="evidence-list" class="evidence-list"></ol><div id="review-note" class="review-note" hidden><p class="micro-label">AKASHML REVIEW · UNVERIFIED</p><p id="review-summary"></p><ol id="review-questions" aria-label="Questions to validate"></ol></div></div>
+          </div>
+        </section>
+
+        <section class="step-section report-panel" aria-labelledby="report-title">
+          <div class="step-heading"><span class="step-number">4</span><div>
+            <h2 id="report-title">Review the report draft</h2>
+            <p>A draft helps organize evidence. Only a personally verified live finding should be submitted.</p>
+          </div></div>
+          <div class="step-body report-body"><p id="report-guidance" class="report-guidance">Run a check to generate a draft. A human must verify a real finding before submission.</p>
+            <div id="report-fields" class="report-fields" hidden><label for="draft-title">Title</label><input id="draft-title" type="text" maxlength="200"><label for="draft-information">Proof of concept</label><textarea id="draft-information" rows="7"></textarea><label for="draft-impact">Impact</label><textarea id="draft-impact" rows="4"></textarea><label for="draft-severity">Severity</label><select id="draft-severity" required><option value="">Choose after reviewing impact</option><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option><option value="critical">Critical</option></select></div>
+            <label id="validation-label" class="validation-label" hidden><input id="human-validated" type="checkbox"><span>I personally reproduced this live finding and verified the scope, evidence, and report.</span></label>
+            <div id="validation-note-block" class="validation-note-block" hidden><label for="validation-note">How did you personally validate it?</label><textarea id="validation-note" rows="3" placeholder="Describe the repeat run and evidence you inspected."></textarea></div>
+            <div class="report-actions"><button id="copy-button" class="button button-submit" type="button" disabled>Copy reviewed report <span aria-hidden="true">↗</span></button><p id="submit-note" class="submit-note">A lab run can never be submitted.</p></div>
+            <p class="handoff-note"><a href="https://hackerone.com/vercel" target="_blank" rel="noopener noreferrer">Open Vercel on HackerOne</a> to attach required PoC media and submit a verified live finding.</p><div id="copy-result" class="submission-result" role="status" aria-live="polite" hidden></div>
+          </div>
+        </section>
       </main>
-      <footer class="site-footer"><span>PROOFRUN / HACKATHON PROTOTYPE</span><span>Evidence stays distinct from inference.</span></footer>
+
+      <aside class="side-column" aria-label="Connections and provenance">
+        <section class="side-section" aria-labelledby="integrations-title"><h2 id="integrations-title">Sponsor connections</h2><p class="side-intro">All four services are required for a run. Status shows configuration, not a live service check.</p><ul id="sponsor-statuses" class="sponsor-statuses"><li><span>Guild</span><span class="status-text">Checking</span></li><li><span>AkashML</span><span class="status-text">Checking</span></li><li><span>ClickHouse</span><span class="status-text">Checking</span></li><li><span>Senso</span><span class="status-text">Checking</span></li></ul><div class="integration-meta"><span>HackerOne API <b id="hackerone-status">Checking</b></span><span>Vercel accounts <b id="vercel-status">Checking</b></span><span>ID verification <b id="identity-status">Checking</b></span></div></section>
+        <section class="side-section provenance-section" aria-labelledby="provenance-title"><h2 id="provenance-title">Source provenance</h2><p class="side-intro">What each stage can actually establish.</p><ol class="provenance-list"><li class="is-current"><strong>ProofRun <code>local</code></strong><span>Your browser and this device run the workbench.</span></li><li id="source-program"><strong><span id="source-program-title">HackerOne</span> <code>policy</code></strong><span id="source-program-detail">Waiting for a captured page or local sample.</span></li><li id="source-policy"><strong>Senso <code>context</code></strong><span id="source-policy-detail">A pinned ProofRun policy is retrieved when a run begins.</span></li><li id="source-evidence"><strong>Check <code>evidence</code></strong><span id="source-evidence-detail">No observations recorded yet.</span></li></ol><div class="trace-heading"><h3>Run trace</h3><span id="trace-mode" class="trace-mode"></span></div><div id="trace-empty" class="trace-empty">No sponsor calls recorded.</div><ol id="sponsor-trace" class="sponsor-trace" hidden></ol></section>
+        <p class="side-quiet">Evidence stays distinct from inference.<br>The final report stays in your hands.</p>
+      </aside>
     </div>
-  </body>
+    <footer class="site-footer"><span>PROOFRUN / HACKATHON PROTOTYPE</span><span>Built for responsible, scoped verification.</span></footer>
+  </div>
+</body>
 </html>

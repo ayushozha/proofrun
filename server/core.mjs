@@ -40,7 +40,8 @@ export async function fetchProgramScope() {
     jsonFetch(`${HACKERONE_API}/programs/vercel`, { headers }, 'HackerOne program lookup'),
     jsonFetch(`${HACKERONE_API}/programs/vercel/structured_scopes?page%5Bsize%5D=100`, { headers }, 'HackerOne scope lookup'),
   ]);
-  const attributes = program?.data?.attributes || {};
+  // HackerOne returns this single-resource endpoint without a `data` wrapper.
+  const attributes = program?.attributes || program?.data?.attributes || {};
   if (attributes.handle !== 'vercel' || attributes.submission_state !== 'open') {
     throw new Error('Vercel program is not open for submissions in the HackerOne API.');
   }
@@ -61,8 +62,72 @@ export async function fetchProgramScope() {
   };
 }
 
+/** Read every structured-scope page for a read-only program-policy snapshot. */
+export async function fetchProgramScopeSnapshot() {
+  const headers = { Authorization: h1Auth(), Accept: 'application/json' };
+  const program = await jsonFetch(`${HACKERONE_API}/programs/vercel`, { headers }, 'HackerOne program lookup');
+  const attributes = program?.attributes || program?.data?.attributes || {};
+  if (attributes.handle !== 'vercel') throw new Error('HackerOne did not return the Vercel program.');
+
+  const scopes = [];
+  const ids = new Set();
+  const seenPages = new Set();
+  const pageBase = `${HACKERONE_API}/programs/vercel/structured_scopes`;
+  let next = null;
+  let linkedPages = false;
+  let complete = false;
+  for (let page = 1; page <= 100; page++) {
+    const url = next || new URL(pageBase);
+    if (!next) {
+      url.searchParams.set('page[size]', '100');
+      url.searchParams.set('page[number]', String(page));
+    }
+    if (seenPages.has(url.href)) throw new Error('HackerOne scope pagination repeated a page.');
+    seenPages.add(url.href);
+    const body = await jsonFetch(url, { headers }, 'HackerOne scope lookup');
+    if (!Array.isArray(body?.data) || !body?.links || typeof body.links !== 'object') {
+      throw new Error('HackerOne returned an incomplete structured-scope page.');
+    }
+    const link = body.links.next?.href ?? body.links.next;
+    if (body.data.length === 0) {
+      if (link) throw new Error('HackerOne returned an incomplete structured-scope page.');
+      complete = true;
+      break;
+    }
+    for (const item of body.data) {
+      const attrs = item?.attributes;
+      if (!item?.id || ids.has(item.id) || typeof attrs?.asset_type !== 'string'
+        || typeof attrs?.asset_identifier !== 'string'
+        || typeof attrs?.eligible_for_submission !== 'boolean'
+        || typeof attrs?.eligible_for_bounty !== 'boolean') {
+        throw new Error('HackerOne returned a duplicate or incomplete structured scope.');
+      }
+      ids.add(item.id);
+      const type = attrs.asset_type.trim().toLowerCase();
+      const identifier = attrs.asset_identifier.trim().replace(/\s+/g, ' ');
+      if (!type || !identifier || identifier.length > 500) throw new Error('HackerOne returned an invalid scope identifier.');
+      scopes.push(`${type} | ${identifier} | submission:${attrs.eligible_for_submission} | bounty:${attrs.eligible_for_bounty}`);
+    }
+    if (link) {
+      if (typeof link !== 'string') throw new Error('HackerOne returned an invalid scope-pagination link.');
+      next = new URL(link, url);
+      if (next.origin !== new URL(HACKERONE_API).origin || next.pathname !== new URL(pageBase).pathname) {
+        throw new Error('HackerOne scope pagination left the program API.');
+      }
+      linkedPages = true;
+    } else if (linkedPages) {
+      complete = true;
+      break;
+    } else {
+      next = null;
+    }
+  }
+  if (!complete) throw new Error('HackerOne scope pagination did not finish.');
+  return { url: 'https://hackerone.com/vercel', fetchedAt: new Date().toISOString(), scopes: [...new Set(scopes)].sort() };
+}
+
 function token(name) {
-  const value = process.env[name];
+  const value = process.env[name]?.trim();
   if (!value) throw new Error(`${name} is required for the live check.`);
   return value;
 }
@@ -84,20 +149,50 @@ async function projectRead({ baseUrl, projectId, actor, bearer, teamId }) {
   };
 }
 
+async function verifyLiveAccounts(ownerToken, otherToken) {
+  const identity = (bearer, label) => jsonFetch(`${VERCEL_API}/v2/user`, {
+    headers: { Authorization: `Bearer ${bearer}`, Accept: 'application/json' }, redirect: 'error',
+  }, label);
+  const [owner, other] = await Promise.all([
+    identity(ownerToken, 'Vercel owner identity'), identity(otherToken, 'Vercel other-account identity'),
+  ]);
+  const ownerUser = owner?.user;
+  const otherUser = other?.user;
+  if (![ownerUser, otherUser].every((user) => typeof user?.id === 'string' && user.id && typeof user.email === 'string')) {
+    throw new Error('Vercel identity lookup must return a user ID and email for both accounts.');
+  }
+  if (ownerUser.id === otherUser.id) throw new Error('The Vercel tokens must belong to two different user accounts.');
+
+  const handle = token('HACKERONE_API_USERNAME').toLowerCase();
+  const isHackerAlias = (email) => {
+    const parts = email.toLowerCase().split('@');
+    const local = parts[0];
+    return parts.length === 2 && parts[1] === 'wearehackerone.com' &&
+      (local === handle || (local.startsWith(`${handle}+`) && local.length > handle.length + 1));
+  };
+  if (![ownerUser, otherUser].every((user) => isHackerAlias(user.email))) {
+    throw new Error('Both Vercel test accounts must show this researcher’s HackerOne email alias.');
+  }
+}
+
 export async function probeProject(mode, port) {
   const live = mode === 'live';
   if (!live && mode !== 'lab') throw new Error('Choose lab or live mode.');
   const projectId = live ? token('VERCEL_PROJECT_ID') : 'prj_proofrun_lab';
   if (live && !/^prj_[A-Za-z0-9]+$/.test(projectId)) throw new Error('VERCEL_PROJECT_ID must be a project ID beginning with prj_.');
+  const ownerToken = live ? token('VERCEL_OWNER_TOKEN') : 'lab-owner';
+  const otherToken = live ? token('VERCEL_OTHER_TOKEN') : 'lab-other';
+  if (live && ownerToken === otherToken) throw new Error('The owner and other-account Vercel tokens must be different.');
   const teamId = live ? process.env.VERCEL_TEAM_ID : '';
   if (teamId && !/^team_[A-Za-z0-9]+$/.test(teamId)) throw new Error('VERCEL_TEAM_ID must be a team ID beginning with team_.');
   const baseUrl = live ? VERCEL_API : `http://127.0.0.1:${port}/lab`;
-  const owner = await projectRead({ baseUrl, projectId, actor: 'owner', bearer: live ? token('VERCEL_OWNER_TOKEN') : 'lab-owner', teamId });
+  if (live) await verifyLiveAccounts(ownerToken, otherToken);
+  const owner = await projectRead({ baseUrl, projectId, actor: 'owner', bearer: ownerToken, teamId });
   if (owner.status !== 200 || !owner.ownerMarkerPresent) {
     return [owner, { actor: 'other', status: 0, ownerMarkerPresent: false, detail: 'Skipped because the owner control failed.' }];
   }
   if (live) await new Promise((resolve) => setTimeout(resolve, 300));
-  const other = await projectRead({ baseUrl, projectId, actor: 'other', bearer: live ? token('VERCEL_OTHER_TOKEN') : 'lab-other', teamId });
+  const other = await projectRead({ baseUrl, projectId, actor: 'other', bearer: otherToken, teamId });
   if (other.ownerMarkerPresent) return [owner, other]; // One confirmation is enough.
   if (live) await new Promise((resolve) => setTimeout(resolve, 300));
   const anonymous = await projectRead({ baseUrl, projectId, actor: 'anonymous', teamId });

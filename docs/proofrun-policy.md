@@ -2,6 +2,7 @@
 
 This is ProofRun's operating policy for its hackathon prototype. It does not replace the current HackerOne program rules or establish authorization to test a target.
 
+- A policy watch run performs read-only HackerOne structured-scope monitoring. It may fetch the current Vercel program metadata and scopes through the HackerOne researcher API, compare normalized scope identifiers and submission eligibility with the prior ClickHouse snapshot, and publish a sourced change alert in ProofRun. Policy-watch data never authorizes a target request or a vulnerability report.
 - The only supported program adapter is Vercel on HackerOne. A live run requires a fresh capture of the program page in a signed-in browser and eligible structured scope confirmed through the HackerOne API.
 - A live check uses two separate, researcher-owned Vercel accounts. The owner account holds the private test project; the other account is not a member of that project or team.
 - The only permitted test request is `GET /v9/projects/{idOrName}` for that researcher-owned project. ProofRun may compare the owner and other-account responses and make an anonymous control request only if needed. No other tests, targets, mutations, fuzzing, or scanning are authorized by this policy.
